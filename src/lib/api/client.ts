@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3000',
+  baseURL: 'https://photo-picker-backend.vercel.app',
 });
 
 // Request interceptor to add token
