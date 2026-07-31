@@ -31,6 +31,8 @@ export default function LoginPage() {
       
       // Store token
       localStorage.setItem('admin_token', session.accessToken);
+      localStorage.setItem('admin_user_id', session.userId);
+      localStorage.setItem('admin_device_id', session.deviceId);
       
       // We rely on the API returning data, if they don't have ADMIN role, 
       // the dashboard endpoints will return 403 Forbidden anyway.
