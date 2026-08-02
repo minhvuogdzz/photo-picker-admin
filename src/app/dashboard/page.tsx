@@ -27,7 +27,8 @@ export default function DashboardPage() {
     queryFn: async () => {
       const res = await api.get('/admin/dashboard');
       return res.data;
-    }
+    },
+    refetchInterval: 5000
   });
 
   const { data: users, isLoading: usersLoading } = useQuery({
@@ -35,7 +36,8 @@ export default function DashboardPage() {
     queryFn: async () => {
       const res = await api.get('/admin/users');
       return res.data;
-    }
+    },
+    refetchInterval: 5000
   });
 
   const { data: keys, isLoading: keysLoading } = useQuery({
@@ -43,7 +45,8 @@ export default function DashboardPage() {
     queryFn: async () => {
       const res = await api.get('/license/keys');
       return res.data;
-    }
+    },
+    refetchInterval: 5000
   });
 
   // User Actions
