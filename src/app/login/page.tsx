@@ -20,11 +20,18 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      // Create a persistent device ID for the admin dashboard if it doesn't exist
+      let deviceFingerprint = localStorage.getItem('admin_dashboard_device_id');
+      if (!deviceFingerprint) {
+        deviceFingerprint = 'admin-dashboard-' + Date.now();
+        localStorage.setItem('admin_dashboard_device_id', deviceFingerprint);
+      }
+
       // Use the regular login endpoint, but Admin dashboard expects an admin account
       const res = await api.post('/auth/login', { 
         email, 
         password,
-        deviceFingerprint: 'admin-dashboard-' + Date.now()
+        deviceFingerprint
       });
       
       const session = res.data.data;
