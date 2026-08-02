@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus } from 'lucide-react';
+import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -203,7 +203,8 @@ export default function DashboardPage() {
                       <Input type="password" value={newUser.password} onChange={(e) => setNewUser({...newUser, password: e.target.value})} placeholder="••••••••" />
                     </div>
                     <Button className="w-full" onClick={() => createUserMutation.mutate()} disabled={createUserMutation.isPending}>
-                      Tạo tài khoản
+                      {createUserMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      {createUserMutation.isPending ? 'Đang tạo...' : 'Tạo tài khoản'}
                     </Button>
                   </div>
                 </DialogContent>
@@ -227,8 +228,14 @@ export default function DashboardPage() {
                       <TableCell colSpan={6} className="text-center h-24">Đang tải...</TableCell>
                     </TableRow>
                   ) : (
-                    users?.map((user: any) => (
-                      <TableRow key={user.id}>
+                    users?.map((user: any) => {
+                      const isUpdatingUser = updateSubMutation.isPending && updateSubMutation.variables?.id === user.id;
+                      const isSuspendingUser = suspendMutation.isPending && suspendMutation.variables === user.id;
+                      const isKickingDevice = kickDeviceMutation.isPending && user.devices?.length > 0 && kickDeviceMutation.variables === user.devices[0].id;
+                      const isRowLoading = isUpdatingUser || isSuspendingUser || isKickingDevice;
+
+                      return (
+                      <TableRow key={user.id} className={isRowLoading ? 'opacity-70 pointer-events-none transition-opacity' : 'transition-opacity'}>
                         <TableCell className="font-medium">{user.email}</TableCell>
                         <TableCell>{user.name}</TableCell>
                         <TableCell>
@@ -251,9 +258,11 @@ export default function DashboardPage() {
                                 variant="destructive" 
                                 size="sm" 
                                 className="h-6 text-[10px] px-2"
+                                disabled={isRowLoading}
                                 onClick={() => kickDeviceMutation.mutate(user.devices[0].id)}
                               >
-                                Kick
+                                {isKickingDevice ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                                {isKickingDevice ? 'Đang kick...' : 'Kick'}
                               </Button>
                             </div>
                           ) : (
@@ -263,8 +272,12 @@ export default function DashboardPage() {
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger render={
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <MoreHorizontal className="h-4 w-4" />
+                              <Button variant="ghost" className="h-8 w-8 p-0" disabled={isRowLoading}>
+                                {isUpdatingUser || isSuspendingUser ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                ) : (
+                                  <MoreHorizontal className="h-4 w-4" />
+                                )}
                               </Button>
                             } />
                             <DropdownMenuContent align="end">
@@ -290,7 +303,8 @@ export default function DashboardPage() {
                           </DropdownMenu>
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -318,7 +332,8 @@ export default function DashboardPage() {
                       <Input type="number" min={1} value={keyParams.durationDays} onChange={(e) => setKeyParams({...keyParams, durationDays: parseInt(e.target.value)})} />
                     </div>
                     <Button className="w-full" onClick={() => generateKeysMutation.mutate()} disabled={generateKeysMutation.isPending}>
-                      Tạo ngay
+                      {generateKeysMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      {generateKeysMutation.isPending ? 'Đang tạo...' : 'Tạo ngay'}
                     </Button>
                   </div>
                 </DialogContent>
