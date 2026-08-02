@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -110,6 +110,53 @@ export default function DashboardPage() {
     onError: () => toast.error('Lỗi tạo key')
   });
 
+  const scanMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/scan-expired');
+      return res.data;
+    },
+    onSuccess: (data) => toast.success(`Đã quét và cảnh báo ${data.count} tài khoản`),
+    onError: () => toast.error('Có lỗi khi quét')
+  });
+
+  const notifyMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/notify-expiring');
+      return res.data;
+    },
+    onSuccess: (data) => toast.success(`Đã gửi thông báo cho ${data.count} tài khoản`),
+    onError: () => toast.error('Có lỗi khi gửi thông báo')
+  });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+
+  const filteredUsers = users?.filter((u: any) => {
+    // Search
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = u.email.toLowerCase().includes(searchLower) || u.name.toLowerCase().includes(searchLower);
+    
+    if (!matchesSearch) return false;
+
+    // Filter
+    if (statusFilter === 'ALL') return true;
+    
+    const status = u.subscription?.status || 'INACTIVE';
+    const expiresAt = u.subscription?.expiresAt ? new Date(u.subscription.expiresAt) : null;
+    const now = new Date();
+    const daysRemaining = expiresAt ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+    if (statusFilter === 'ACTIVE') return status === 'ACTIVE';
+    if (statusFilter === 'LIFETIME') return status === 'LIFETIME';
+    if (statusFilter === 'TRIAL') return status === 'TRIAL';
+    if (statusFilter === 'EXPIRED') return status === 'EXPIRED';
+    if (statusFilter === 'SUSPENDED') return status === 'SUSPENDED';
+    if (statusFilter === 'EXPIRING_SOON') return (status === 'ACTIVE' || status === 'TRIAL') && daysRemaining !== null && daysRemaining <= 7 && daysRemaining > 0;
+    if (statusFilter === 'CRACK') return status === 'EXPIRED' || status === 'INACTIVE';
+
+    return true;
+  });
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('vi-VN');
@@ -132,12 +179,22 @@ export default function DashboardPage() {
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <Button variant="outline" onClick={() => {
-          localStorage.removeItem('admin_token');
-          window.location.href = '/login';
-        }}>
-          Đăng xuất
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="destructive" onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending}>
+            {scanMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+            Quét Bản Quyền
+          </Button>
+          <Button variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => notifyMutation.mutate()} disabled={notifyMutation.isPending}>
+            {notifyMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <BellRing className="w-4 h-4 mr-2" />}
+            Thông báo Hết Hạn
+          </Button>
+          <Button variant="secondary" onClick={() => {
+            localStorage.removeItem('admin_token');
+            window.location.href = '/login';
+          }}>
+            Đăng xuất
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -182,7 +239,35 @@ export default function DashboardPage() {
         <TabsContent value="users">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Danh sách Người dùng</CardTitle>
+              <CardTitle className="mb-4">Danh sách Người dùng</CardTitle>
+              <div className="flex flex-col md:flex-row gap-4 mb-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Tìm kiếm theo tên hoặc email..." 
+                    className="pl-9"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="relative w-full md:w-64">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <select 
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <option value="ALL">Tất cả trạng thái</option>
+                    <option value="ACTIVE">Đang Active</option>
+                    <option value="LIFETIME">Vĩnh viễn (Lifetime)</option>
+                    <option value="TRIAL">Đang dùng thử</option>
+                    <option value="EXPIRED">Đã hết hạn</option>
+                    <option value="EXPIRING_SOON">Sắp hết hạn (&lt;7 ngày)</option>
+                    <option value="CRACK">Crack / Không bản quyền</option>
+                    <option value="SUSPENDED">Bị khoá</option>
+                  </select>
+                </div>
+              </div>
               <Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
                 <DialogTrigger render={<Button size="sm"><Plus className="w-4 h-4 mr-2" /> Tạo tài khoản</Button>} />
                 <DialogContent>
@@ -227,8 +312,12 @@ export default function DashboardPage() {
                     <TableRow>
                       <TableCell colSpan={6} className="text-center h-24">Đang tải...</TableCell>
                     </TableRow>
+                  ) : filteredUsers?.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">Không tìm thấy người dùng nào phù hợp với bộ lọc.</TableCell>
+                    </TableRow>
                   ) : (
-                    users?.map((user: any) => {
+                    filteredUsers?.map((user: any) => {
                       const isUpdatingUser = updateSubMutation.isPending && updateSubMutation.variables?.id === user.id;
                       const isSuspendingUser = suspendMutation.isPending && suspendMutation.variables === user.id;
                       const isKickingDevice = kickDeviceMutation.isPending && user.devices?.length > 0 && kickDeviceMutation.variables === user.devices[0].id;
