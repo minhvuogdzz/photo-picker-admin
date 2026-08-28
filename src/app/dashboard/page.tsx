@@ -13,14 +13,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X } from 'lucide-react';
+import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ResourceManager } from "@/components/ResourceManager";
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+
 
 export default function DashboardPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !localStorage.getItem('admin_token')) {
+      router.push('/login');
+    }
+  }, [router]);
+
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['stats'],
@@ -51,8 +63,8 @@ export default function DashboardPage() {
 
   // User Actions
   const updateSubMutation = useMutation({
-    mutationFn: async ({ id, addDays, status }: any) => {
-      await api.post(`/admin/users/${id}/subscription`, { addDays, status });
+    mutationFn: async ({ id, addDays, status, isPremium }: any) => {
+      await api.post(`/admin/users/${id}/subscription`, { addDays, status, isPremium });
     },
     onSuccess: () => {
       toast.success('Cập nhật gói thành công');
@@ -100,13 +112,13 @@ export default function DashboardPage() {
 
   // Key Actions
   const [generateKeysOpen, setGenerateKeysOpen] = useState(false);
-  const [keyParams, setKeyParams] = useState({ count: 1, durationDays: 90 });
+  const [keyParams, setKeyParams] = useState({ count: 1, durationDays: 90, keyType: 'ORIGINAL' });
   const generateKeysMutation = useMutation({
     mutationFn: async () => {
       await api.post(`/license/generate`, keyParams);
     },
     onSuccess: () => {
-      toast.success(`Đã tạo ${keyParams.count} key thành công`);
+      toast.success(`Đã tạo ${keyParams.count} key ${keyParams.keyType === 'PREMIUM' ? '👑 Premium' : 'Original'} thành công`);
       setGenerateKeysOpen(false);
       queryClient.invalidateQueries({ queryKey: ['keys'] });
     },
@@ -357,6 +369,7 @@ export default function DashboardPage() {
         <TabsList className="mb-4">
           <TabsTrigger value="users" className="flex items-center gap-2"><Users size={16}/> Khách hàng</TabsTrigger>
           <TabsTrigger value="keys" className="flex items-center gap-2"><Key size={16}/> License Keys</TabsTrigger>
+          <TabsTrigger value="resources" className="flex items-center gap-2"><Layers size={16}/> Kho Tài Nguyên</TabsTrigger>
           <TabsTrigger value="showcase" className="flex items-center gap-2"><ImageIcon size={16}/> Album Slider (Đăng nhập)</TabsTrigger>
         </TabsList>
         
@@ -426,6 +439,7 @@ export default function DashboardPage() {
                     <TableHead>Email</TableHead>
                     <TableHead>Tên</TableHead>
                     <TableHead>Trạng thái</TableHead>
+                    <TableHead>Đặc quyền</TableHead>
                     <TableHead>Hết hạn</TableHead>
                     <TableHead>Thiết bị</TableHead>
                     <TableHead className="text-right">Hành động</TableHead>
@@ -434,11 +448,11 @@ export default function DashboardPage() {
                 <TableBody>
                   {usersLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24">Đang tải...</TableCell>
+                      <TableCell colSpan={7} className="text-center h-24">Đang tải...</TableCell>
                     </TableRow>
                   ) : filteredUsers?.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">Không tìm thấy người dùng nào phù hợp với bộ lọc.</TableCell>
+                      <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">Không tìm thấy người dùng nào phù hợp với bộ lọc.</TableCell>
                     </TableRow>
                   ) : (
                     filteredUsers?.map((user: any) => {
@@ -461,6 +475,17 @@ export default function DashboardPage() {
                           }`}>
                             {user.subscription?.status || 'INACTIVE'}
                           </span>
+                        </TableCell>
+                        <TableCell>
+                          {user.subscription?.isPremium ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
+                              👑 VIP Premium
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground px-2 py-0.5 rounded bg-muted/60">
+                              Chuẩn (Original)
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>{user.subscription?.status === 'LIFETIME' ? 'Vĩnh viễn' : formatDateWithRemaining(user.subscription?.expiresAt)}</TableCell>
                         <TableCell>
@@ -494,6 +519,12 @@ export default function DashboardPage() {
                               </Button>
                             } />
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className={user.subscription?.isPremium ? "text-amber-600 font-semibold" : "font-semibold"}
+                                onClick={() => updateSubMutation.mutate({ id: user.id, isPremium: !user.subscription?.isPremium })}
+                              >
+                                {user.subscription?.isPremium ? "👑 Hủy quyền VIP Premium" : "👑 Cấp quyền VIP Premium"}
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 30 })}>
                                 Gia hạn 1 tháng
                               </DropdownMenuItem>
@@ -537,6 +568,17 @@ export default function DashboardPage() {
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
+                      <Label>Loại Bản Quyền (Key Type)</Label>
+                      <select
+                        value={keyParams.keyType}
+                        onChange={(e) => setKeyParams({ ...keyParams, keyType: e.target.value })}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
+                      >
+                        <option value="ORIGINAL">Original Key (Bản quyền chuẩn)</option>
+                        <option value="PREMIUM">👑 Premium Key (Full tính năng + Kho tài nguyên)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
                       <Label>Số lượng Key</Label>
                       <Input type="number" min={1} max={100} value={keyParams.count} onChange={(e) => setKeyParams({...keyParams, count: parseInt(e.target.value)})} />
                     </div>
@@ -557,6 +599,7 @@ export default function DashboardPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>License Key</TableHead>
+                    <TableHead>Loại Key</TableHead>
                     <TableHead>Thời hạn</TableHead>
                     <TableHead>Trạng thái</TableHead>
                     <TableHead>Người dùng (nếu có)</TableHead>
@@ -566,12 +609,23 @@ export default function DashboardPage() {
                 <TableBody>
                   {keysLoading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center h-24">Đang tải...</TableCell>
+                      <TableCell colSpan={6} className="text-center h-24">Đang tải...</TableCell>
                     </TableRow>
                   ) : (
                     keys?.map((k: any) => (
                       <TableRow key={k.id}>
                         <TableCell className="font-mono font-medium tracking-widest">{k.key}</TableCell>
+                        <TableCell>
+                          {k.keyType === 'PREMIUM' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
+                              👑 PREMIUM
+                            </span>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground px-2 py-0.5 rounded bg-muted/60">
+                              ORIGINAL
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell>{k.durationDays} ngày</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -855,6 +909,10 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="resources">
+          <ResourceManager />
         </TabsContent>
       </Tabs>
     </div>
