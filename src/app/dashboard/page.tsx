@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing } from 'lucide-react';
+import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -131,6 +131,126 @@ export default function DashboardPage() {
     onError: () => toast.error('Có lỗi khi gửi thông báo')
   });
 
+  // Showcase Slider Queries & Mutations
+  const { data: showcaseImages, isLoading: showcaseLoading } = useQuery<any[]>({
+    queryKey: ['showcase'],
+    queryFn: async () => {
+      const res = await api.get('/admin/showcase');
+      if (Array.isArray(res.data?.data)) return res.data.data;
+      if (Array.isArray(res.data)) return res.data;
+      return [];
+    },
+    refetchInterval: 5000
+  });
+
+  const [uploadShowcaseOpen, setUploadShowcaseOpen] = useState(false);
+  const [showcaseFiles, setShowcaseFiles] = useState<File[]>([]);
+  const [showcasePreviews, setShowcasePreviews] = useState<{ id: string; file: File; url: string }[]>([]);
+  const [showcaseTitle, setShowcaseTitle] = useState('');
+  const [showcaseOrder, setShowcaseOrder] = useState<number>(0);
+
+  const handleShowcaseFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
+
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+    const validFiles: File[] = [];
+    const oversizedFiles: string[] = [];
+
+    for (const f of rawFiles) {
+      if (f.size > MAX_SIZE) {
+        oversizedFiles.push(`${f.name} (${(f.size / (1024 * 1024)).toFixed(1)}MB)`);
+      } else {
+        validFiles.push(f);
+      }
+    }
+
+    if (oversizedFiles.length > 0) {
+      toast.error(`Có ${oversizedFiles.length} file vượt quá giới hạn 5MB:\n${oversizedFiles.join(', ')}`);
+    }
+
+    if (validFiles.length > 0) {
+      const newPreviews = validFiles.map((file) => ({
+        id: Math.random().toString(36).substring(2),
+        file,
+        url: URL.createObjectURL(file),
+      }));
+
+      setShowcaseFiles((prev) => [...prev, ...validFiles]);
+      setShowcasePreviews((prev) => [...prev, ...newPreviews]);
+    }
+
+    // Reset input value so same files can be re-selected
+    e.target.value = '';
+  };
+
+  const removePreviewFile = (index: number) => {
+    setShowcaseFiles((prev) => prev.filter((_, i) => i !== index));
+    setShowcasePreviews((prev) => {
+      const item = prev[index];
+      if (item) URL.revokeObjectURL(item.url);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const uploadShowcaseMutation = useMutation({
+    mutationFn: async () => {
+      if (showcaseFiles.length === 0) throw new Error('Vui lòng chọn ít nhất 1 ảnh');
+      const formData = new FormData();
+      showcaseFiles.forEach((file) => {
+        formData.append('images', file);
+      });
+      if (showcaseTitle.trim()) formData.append('title', showcaseTitle.trim());
+      formData.append('order', String(showcaseOrder));
+
+      const res = await api.post('/admin/showcase/upload', formData);
+      return res.data;
+    },
+    onSuccess: (data: any) => {
+      toast.success(data?.message || `Đã tải ${showcaseFiles.length} ảnh lên Cloudinary và lưu vào Album`);
+      setUploadShowcaseOpen(false);
+      showcasePreviews.forEach((p) => URL.revokeObjectURL(p.url));
+      setShowcaseFiles([]);
+      setShowcasePreviews([]);
+      setShowcaseTitle('');
+      setShowcaseOrder(0);
+      queryClient.invalidateQueries({ queryKey: ['showcase'] });
+    },
+    onError: (err: any) => toast.error('Lỗi upload: ' + (err.response?.data?.message || err.message))
+  });
+
+  const toggleShowcaseMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      await api.patch(`/admin/showcase/${id}`, { isActive });
+    },
+    onSuccess: () => {
+      toast.success('Đã cập nhật trạng thái hiển thị');
+      queryClient.invalidateQueries({ queryKey: ['showcase'] });
+    },
+    onError: () => toast.error('Có lỗi xảy ra')
+  });
+
+  const deleteShowcaseMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/admin/showcase/${id}`);
+    },
+    onSuccess: () => {
+      toast.success('Đã xoá ảnh khỏi album');
+      queryClient.invalidateQueries({ queryKey: ['showcase'] });
+    },
+    onError: () => toast.error('Có lỗi khi xoá ảnh')
+  });
+
+  const updateOrderMutation = useMutation({
+    mutationFn: async ({ id, order }: { id: string; order: number }) => {
+      await api.patch(`/admin/showcase/${id}`, { order });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['showcase'] });
+    },
+    onError: () => toast.error('Lỗi cập nhật thứ tự')
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
@@ -237,6 +357,7 @@ export default function DashboardPage() {
         <TabsList className="mb-4">
           <TabsTrigger value="users" className="flex items-center gap-2"><Users size={16}/> Khách hàng</TabsTrigger>
           <TabsTrigger value="keys" className="flex items-center gap-2"><Key size={16}/> License Keys</TabsTrigger>
+          <TabsTrigger value="showcase" className="flex items-center gap-2"><ImageIcon size={16}/> Album Slider (Đăng nhập)</TabsTrigger>
         </TabsList>
         
         <TabsContent value="users">
@@ -466,6 +587,272 @@ export default function DashboardPage() {
                   )}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab Album Slider */}
+        <TabsContent value="showcase">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-bold">Quản lý Album Slider (Màn hình Đăng nhập)</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Các hình ảnh dưới đây được lưu trữ trên Cloudinary và tự động phát slide trên ứng dụng Desktop.
+                </p>
+              </div>
+
+              <Dialog open={uploadShowcaseOpen} onOpenChange={setUploadShowcaseOpen}>
+                <DialogTrigger
+                  render={
+                    <Button className="flex items-center gap-2">
+                      <UploadCloud size={16} /> Tải ảnh mới lên Cloudinary
+                    </Button>
+                  }
+                />
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Tải ảnh lên Album Slider</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Chọn các file ảnh (Tối đa 5MB/ảnh)</Label>
+                        <span className="text-xs text-muted-foreground">JPG, PNG, WEBP</span>
+                      </div>
+                      <Input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleShowcaseFileChange}
+                      />
+                      <p className="text-[12px] text-muted-foreground">
+                        💡 Có thể chọn cùng lúc nhiều ảnh. Hệ thống sẽ tự động nén tối ưu hiển thị trên Cloudinary.
+                      </p>
+                    </div>
+
+                    {/* Previews List */}
+                    {showcasePreviews.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-semibold text-foreground">
+                            Đã chọn {showcasePreviews.length} ảnh (Tổng: {(showcaseFiles.reduce((acc, f) => acc + f.size, 0) / (1024 * 1024)).toFixed(2)} MB)
+                          </Label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              showcasePreviews.forEach((p) => URL.revokeObjectURL(p.url));
+                              setShowcaseFiles([]);
+                              setShowcasePreviews([]);
+                            }}
+                            className="text-xs text-destructive hover:underline"
+                          >
+                            Xoá tất cả
+                          </button>
+                        </div>
+                        <div className="max-h-52 overflow-y-auto grid grid-cols-3 gap-2 p-2 border rounded-xl bg-muted/20">
+                          {showcasePreviews.map((p, idx) => (
+                            <div key={p.id} className="relative group rounded-lg overflow-hidden border border-border bg-black/10 aspect-video flex flex-col justify-end">
+                              <img
+                                src={p.url}
+                                alt={p.file.name}
+                                className="absolute inset-0 w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <button
+                                type="button"
+                                onClick={() => removePreviewFile(idx)}
+                                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 text-white hover:bg-destructive flex items-center justify-center transition-colors z-10"
+                                title="Bỏ ảnh này"
+                              >
+                                <X size={12} />
+                              </button>
+                              <div className="relative z-10 p-1 text-[10px] text-white truncate font-medium drop-shadow">
+                                {(p.file.size / (1024 * 1024)).toFixed(1)}MB
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label>Tiêu đề chung / Tên mô tả (Tùy chọn)</Label>
+                      <Input
+                        placeholder="VD: Album Cưới Studio 2026..."
+                        value={showcaseTitle}
+                        onChange={(e) => setShowcaseTitle(e.target.value)}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        {showcaseFiles.length > 1
+                          ? 'Khi tải nhiều ảnh, tiêu đề sẽ tự động đánh số: [Tên] #1, [Tên] #2...'
+                          : 'Nếu để trống, hệ thống sẽ lấy tên file ảnh gốc.'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Thứ tự hiển thị bắt đầu (Số nhỏ chạy trước)</Label>
+                      <Input
+                        type="number"
+                        value={showcaseOrder}
+                        onChange={(e) => setShowcaseOrder(parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+
+                    <Button
+                      className="w-full"
+                      onClick={() => uploadShowcaseMutation.mutate()}
+                      disabled={uploadShowcaseMutation.isPending || showcaseFiles.length === 0}
+                    >
+                      {uploadShowcaseMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang nén và đẩy {showcaseFiles.length} ảnh lên Cloudinary...
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-4 h-4 mr-2" /> Tải lên Cloudinary ({showcaseFiles.length} ảnh)
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+
+            <CardContent>
+              {showcaseLoading ? (
+                <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <p className="text-sm">Đang tải danh sách album...</p>
+                </div>
+              ) : !showcaseImages || !Array.isArray(showcaseImages) || showcaseImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-2xl border-border/60 p-8 text-center bg-muted/20">
+                  <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                    <ImageIcon className="w-7 h-7 text-primary" />
+                  </div>
+                  <h3 className="text-base font-bold text-foreground mb-1">Chưa có ảnh nào trong Album Slider</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm mb-4">
+                    Hiện tại app Desktop đang chạy bằng ảnh mặc định cục bộ. Hãy tải ảnh đầu tiên lên Cloudinary để hiển thị!
+                  </p>
+                  <Button onClick={() => setUploadShowcaseOpen(true)} className="flex items-center gap-2">
+                    <UploadCloud size={16} /> Tải ảnh ngay
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {showcaseImages.map((img: any, idx: number) => (
+                    <div
+                      key={img.id}
+                      className={`group relative rounded-xl border overflow-hidden transition-all shadow-sm hover:shadow-md flex flex-col bg-card ${
+                        img.isActive ? 'border-border' : 'border-dashed border-muted-foreground/30 opacity-70'
+                      }`}
+                    >
+                      {/* Image Preview */}
+                      <div className="relative aspect-video w-full bg-black/10 overflow-hidden">
+                        <img
+                          src={img.url}
+                          alt={img.title || 'Showcase'}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                        
+                        {/* Order badge */}
+                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white text-xs font-mono font-bold">
+                          #{img.order !== undefined ? img.order : idx + 1}
+                        </div>
+
+                        {/* Status Badge */}
+                        <div className="absolute top-2 right-2">
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold backdrop-blur-md ${
+                              img.isActive
+                                ? 'bg-green-500/80 text-white'
+                                : 'bg-gray-500/80 text-white'
+                            }`}
+                          >
+                            {img.isActive ? 'Đang chạy' : 'Đang ẩn'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card Info */}
+                      <div className="p-3 flex-1 flex flex-col justify-between space-y-2">
+                        <div>
+                          <p className="font-semibold text-sm truncate" title={img.title}>
+                            {img.title || 'Không có tên'}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {formatDate(img.createdAt)}
+                          </p>
+                        </div>
+
+                        {/* Action Toolbar */}
+                        <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                          <div className="flex items-center gap-1">
+                            {/* Toggle Active */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title={img.isActive ? 'Ẩn ảnh này' : 'Bật hiển thị'}
+                              onClick={() => toggleShowcaseMutation.mutate({ id: img.id, isActive: !img.isActive })}
+                            >
+                              {img.isActive ? <Eye size={15} className="text-green-600" /> : <EyeOff size={15} className="text-muted-foreground" />}
+                            </Button>
+
+                            {/* Order adjust */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="Tăng thứ tự ưu tiên (Giảm số)"
+                              onClick={() => updateOrderMutation.mutate({ id: img.id, order: Math.max(0, (img.order || 0) - 1) })}
+                            >
+                              <ArrowUp size={15} />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="Giảm thứ tự ưu tiên (Tăng số)"
+                              onClick={() => updateOrderMutation.mutate({ id: img.id, order: (img.order || 0) + 1 })}
+                            >
+                              <ArrowDown size={15} />
+                            </Button>
+
+                            {/* Open link */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="Mở ảnh gốc trên Cloudinary"
+                              onClick={() => window.open(img.url, '_blank')}
+                            >
+                              <ExternalLink size={14} />
+                            </Button>
+                          </div>
+
+                          {/* Delete Button */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            title="Xoá ảnh"
+                            onClick={() => {
+                              if (confirm('Bạn có chắc chắn muốn xoá ảnh này khỏi Album Slider?')) {
+                                deleteShowcaseMutation.mutate(img.id);
+                              }
+                            }}
+                          >
+                            <Trash2 size={15} />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
