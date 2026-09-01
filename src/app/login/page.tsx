@@ -62,11 +62,11 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Tài khoản Admin (hoặc Email)</Label>
+              <Label htmlFor="email">Tài khoản (Username hoặc Email)</Label>
               <Input 
                 id="email" 
                 type="text" 
-                placeholder="admin" 
+                placeholder="admin hoặc admin@example.com" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

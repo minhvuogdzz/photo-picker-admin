@@ -95,7 +95,7 @@ export default function DashboardPage() {
   });
 
   const [createUserOpen, setCreateUserOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ email: '', name: '', password: '' });
+  const [newUser, setNewUser] = useState({ email: '', username: '', name: '', password: '' });
   const createUserMutation = useMutation({
     mutationFn: async () => {
       await api.post(`/admin/users`, newUser);
@@ -103,7 +103,7 @@ export default function DashboardPage() {
     onSuccess: () => {
       toast.success('Đã tạo tài khoản thành công');
       setCreateUserOpen(false);
-      setNewUser({ email: '', name: '', password: '' });
+      setNewUser({ email: '', username: '', name: '', password: '' });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
     },
@@ -269,7 +269,9 @@ export default function DashboardPage() {
   const filteredUsers = users?.filter((u: any) => {
     // Search
     const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = u.email.toLowerCase().includes(searchLower) || u.name.toLowerCase().includes(searchLower);
+    const matchesSearch = u.email.toLowerCase().includes(searchLower) || 
+                          u.name.toLowerCase().includes(searchLower) ||
+                          (u.username && u.username.toLowerCase().includes(searchLower));
     
     if (!matchesSearch) return false;
 
@@ -417,6 +419,10 @@ export default function DashboardPage() {
                       <Input value={newUser.name} onChange={(e) => setNewUser({...newUser, name: e.target.value})} placeholder="Nguyễn Văn A" />
                     </div>
                     <div className="space-y-2">
+                      <Label>Tên tài khoản (Username)</Label>
+                      <Input value={newUser.username} onChange={(e) => setNewUser({...newUser, username: e.target.value})} placeholder="vd: hoanghan (để trống sẽ tự lấy theo email)" />
+                    </div>
+                    <div className="space-y-2">
                       <Label>Email</Label>
                       <Input type="email" value={newUser.email} onChange={(e) => setNewUser({...newUser, email: e.target.value})} placeholder="email@example.com" />
                     </div>
@@ -463,7 +469,10 @@ export default function DashboardPage() {
 
                       return (
                       <TableRow key={user.id} className={isRowLoading ? 'opacity-70 pointer-events-none transition-opacity' : 'transition-opacity'}>
-                        <TableCell className="font-medium">{user.email}</TableCell>
+                        <TableCell className="font-medium">
+                          <div>{user.email}</div>
+                          <div className="text-xs text-muted-foreground font-mono">@{user.username || user.email.split('@')[0]}</div>
+                        </TableCell>
                         <TableCell>{user.name}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
