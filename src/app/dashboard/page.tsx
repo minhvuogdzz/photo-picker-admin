@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers } from 'lucide-react';
+import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers, RotateCw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -34,13 +34,30 @@ export default function DashboardPage() {
   }, [router]);
 
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefreshAll = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['users'] }),
+        queryClient.invalidateQueries({ queryKey: ['keys'] }),
+        queryClient.invalidateQueries({ queryKey: ['showcase'] }),
+      ]);
+      toast.success('Dữ liệu đã được làm mới');
+    } catch {
+      toast.error('Không thể làm mới dữ liệu');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['stats'],
     queryFn: async () => {
       const res = await api.get('/admin/dashboard');
       return res.data;
     },
-    refetchInterval: 5000
   });
 
   const { data: users, isLoading: usersLoading } = useQuery({
@@ -49,7 +66,6 @@ export default function DashboardPage() {
       const res = await api.get('/admin/users');
       return res.data;
     },
-    refetchInterval: 5000
   });
 
   const { data: keys, isLoading: keysLoading } = useQuery({
@@ -58,7 +74,6 @@ export default function DashboardPage() {
       const res = await api.get('/license/keys');
       return res.data;
     },
-    refetchInterval: 5000
   });
 
   // User Actions
@@ -152,7 +167,6 @@ export default function DashboardPage() {
       if (Array.isArray(res.data)) return res.data;
       return [];
     },
-    refetchInterval: 5000
   });
 
   const [uploadShowcaseOpen, setUploadShowcaseOpen] = useState(false);
@@ -317,6 +331,10 @@ export default function DashboardPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Admin Dashboard</h1>
         <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={handleRefreshAll} disabled={isRefreshing}>
+            <RotateCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Làm mới
+          </Button>
           <Button variant="destructive" onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending}>
             {scanMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
             Quét Bản Quyền

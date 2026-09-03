@@ -14,6 +14,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     const socket = io('https://photo-picker-backend.vercel.app', {
       transports: ['websocket'],
+      reconnectionAttempts: 2,
+      reconnectionDelay: 15000,
+      reconnectionDelayMax: 60000,
+      timeout: 5000,
+    });
+
+    socket.io.on('reconnect_failed', () => {
+      // Server does not support WebSockets on current deployment (serverless)
+      // Disconnect cleanly to prevent infinite 404 request loops
+      socket.disconnect();
     });
 
     socket.on('connect', () => {
