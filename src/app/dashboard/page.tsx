@@ -247,32 +247,45 @@ export default function DashboardPage() {
         publicId: string;
         title: string;
         order: number;
-      }> = [];
+      }> = new Array(total);
 
-      // Upload từng ảnh lên Cloudinary qua endpoint đơn lẻ để tránh vượt ngưỡng 4.5MB của Vercel Serverless
-      for (let i = 0; i < total; i++) {
-        const item = albumImages[i];
-        setUploadProgressText(`Đang tải ảnh ${i + 1}/${total} lên Cloudinary...`);
+      let completedCount = 0;
+      let currentIndex = 0;
+      const concurrency = 4; // Tải đồng thời 4 ảnh cùng lúc để đạt tốc độ tối đa
 
-        const singleForm = new FormData();
-        singleForm.append('image', item.file);
+      const uploadWorker = async () => {
+        while (currentIndex < total) {
+          const idx = currentIndex++;
+          const item = albumImages[idx];
 
-        const uploadRes = await api.post('/admin/showcase/upload-single', singleForm, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+          const singleForm = new FormData();
+          singleForm.append('image', item.file);
 
-        const uploadedData = uploadRes.data?.data;
-        if (!uploadedData?.url) {
-          throw new Error(`Tải ảnh thứ ${i + 1} (${item.file.name}) thất bại.`);
+          const uploadRes = await api.post('/admin/showcase/upload-single', singleForm, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+
+          const uploadedData = uploadRes.data?.data;
+          if (!uploadedData?.url) {
+            throw new Error(`Tải ảnh thứ ${idx + 1} (${item.file.name}) thất bại.`);
+          }
+
+          uploadedPhotos[idx] = {
+            url: uploadedData.url,
+            publicId: uploadedData.publicId,
+            title: `${albumTitle.trim()} #${idx + 1}`,
+            order: idx,
+          };
+
+          completedCount++;
+          const percent = Math.round((completedCount / total) * 100);
+          setUploadProgressText(`Đang tải ảnh ${completedCount}/${total} (${percent}%)...`);
         }
+      };
 
-        uploadedPhotos.push({
-          url: uploadedData.url,
-          publicId: uploadedData.publicId,
-          title: `${albumTitle.trim()} #${i + 1}`,
-          order: i,
-        });
-      }
+      setUploadProgressText(`Bắt đầu tải ${total} ảnh lên Cloudinary (4 luồng song song)...`);
+      const workers = Array.from({ length: Math.min(concurrency, total) }, () => uploadWorker());
+      await Promise.all(workers);
 
       setUploadProgressText('Đang lưu thông tin bộ ảnh...');
 
@@ -811,10 +824,10 @@ export default function DashboardPage() {
                       <div className="p-3 bg-muted/40 rounded-lg border border-border/50 text-xs text-muted-foreground space-y-1">
                         <p className="flex items-center gap-1.5 font-medium text-foreground">
                           <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                          Hệ thống tự động nén xuống dưới 1,5 MB/ảnh:
+                          Tự động tối ưu Full HD & tải lên siêu tốc:
                         </p>
                         <p>
-                          Ảnh gốc không bị giới hạn dung lượng. Hệ thống giảm chất lượng và kích thước theo từng bước để bảo đảm file gửi lên Cloudinary nhỏ hơn 1,5 MB.
+                          Ảnh gốc được tự động tối ưu chuẩn Full HD (~150 - 350 KB/ảnh) và tải lên Cloudinary song song 4 luồng. Đảm bảo tốc độ tức thì và giữ nguyên độ nét sắc sảo trên màn hình ứng dụng.
                         </p>
                       </div>
                     </div>
