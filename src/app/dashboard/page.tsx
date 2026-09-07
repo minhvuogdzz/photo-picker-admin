@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers, RotateCw } from 'lucide-react';
+import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers, RotateCw, Sparkles } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { ResourceManager } from "@/components/ResourceManager";
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { compressShowcaseBatch, formatFileSizeMB, CompressionResult } from '@/lib/imageCompressor';
 
 
 export default function DashboardPage() {
@@ -43,6 +44,8 @@ export default function DashboardPage() {
         queryClient.invalidateQueries({ queryKey: ['users'] }),
         queryClient.invalidateQueries({ queryKey: ['keys'] }),
         queryClient.invalidateQueries({ queryKey: ['showcase'] }),
+        queryClient.invalidateQueries({ queryKey: ['showcase-albums'] }),
+
       ]);
       toast.success('Dữ liệu đã được làm mới');
     } catch {
@@ -158,124 +161,153 @@ export default function DashboardPage() {
     onError: () => toast.error('Có lỗi khi gửi thông báo')
   });
 
-  // Showcase Slider Queries & Mutations
-  const { data: showcaseImages, isLoading: showcaseLoading } = useQuery<any[]>({
-    queryKey: ['showcase'],
+  // Showcase Slider Queries & Mutations (Album Management)
+  const { data: showcaseAlbums, isLoading: albumsLoading } = useQuery<any[]>({
+    queryKey: ['showcase-albums'],
     queryFn: async () => {
-      const res = await api.get('/admin/showcase');
+      const res = await api.get('/admin/showcase/albums');
       if (Array.isArray(res.data?.data)) return res.data.data;
       if (Array.isArray(res.data)) return res.data;
       return [];
     },
   });
 
-  const [uploadShowcaseOpen, setUploadShowcaseOpen] = useState(false);
-  const [showcaseFiles, setShowcaseFiles] = useState<File[]>([]);
-  const [showcasePreviews, setShowcasePreviews] = useState<{ id: string; file: File; url: string }[]>([]);
-  const [showcaseTitle, setShowcaseTitle] = useState('');
-  const [showcaseOrder, setShowcaseOrder] = useState<number>(0);
+  const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
+  const [albumTitle, setAlbumTitle] = useState('');
+  const [albumDescription, setAlbumDescription] = useState('');
+  const [albumOrder, setAlbumOrder] = useState<number>(0);
+  const [albumImages, setAlbumImages] = useState<CompressionResult[]>([]);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState<string>('');
+  const [selectedAlbumForView, setSelectedAlbumForView] = useState<any | null>(null);
 
-  const handleShowcaseFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAlbumFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawFiles = Array.from(e.target.files || []);
     if (rawFiles.length === 0) return;
 
-    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-    const validFiles: File[] = [];
-    const oversizedFiles: string[] = [];
+    const currentCount = albumImages.length;
+    const remainingSlots = 20 - currentCount;
 
-    for (const f of rawFiles) {
-      if (f.size > MAX_SIZE) {
-        oversizedFiles.push(`${f.name} (${(f.size / (1024 * 1024)).toFixed(1)}MB)`);
-      } else {
-        validFiles.push(f);
+    if (remainingSlots <= 0) {
+      toast.error('Bộ ảnh này đã đạt tối đa 20 ảnh!');
+      e.target.value = '';
+      return;
+    }
+
+    let filesToProcess = rawFiles;
+    if (rawFiles.length > remainingSlots) {
+      toast.warning(`Chỉ có thể chọn thêm tối đa ${remainingSlots} ảnh (giới hạn tối đa 20 ảnh/bộ).`);
+      filesToProcess = rawFiles.slice(0, remainingSlots);
+    }
+
+    setIsCompressing(true);
+    setCompressionProgress('Đang tự động kiểm tra & nén ảnh...');
+
+    try {
+      const results = await compressShowcaseBatch(
+        filesToProcess,
+        (current, total, name) => {
+          setCompressionProgress(`Đang nén ảnh ${current}/${total}: ${name}`);
+        }
+      );
+
+      const compressedCount = results.filter((r) => r.wasCompressed).length;
+      if (compressedCount > 0) {
+        toast.success(`Đã tự động nén ${compressedCount} ảnh xuống dưới 1,5 MB!`);
       }
+
+      setAlbumImages((prev) => [...prev, ...results]);
+    } catch (err: any) {
+      toast.error('Lỗi khi nén ảnh: ' + (err.message || 'Không thể xử lý'));
+    } finally {
+      setIsCompressing(false);
+      setCompressionProgress('');
+      e.target.value = '';
     }
-
-    if (oversizedFiles.length > 0) {
-      toast.error(`Có ${oversizedFiles.length} file vượt quá giới hạn 5MB:\n${oversizedFiles.join(', ')}`);
-    }
-
-    if (validFiles.length > 0) {
-      const newPreviews = validFiles.map((file) => ({
-        id: Math.random().toString(36).substring(2),
-        file,
-        url: URL.createObjectURL(file),
-      }));
-
-      setShowcaseFiles((prev) => [...prev, ...validFiles]);
-      setShowcasePreviews((prev) => [...prev, ...newPreviews]);
-    }
-
-    // Reset input value so same files can be re-selected
-    e.target.value = '';
   };
 
-  const removePreviewFile = (index: number) => {
-    setShowcaseFiles((prev) => prev.filter((_, i) => i !== index));
-    setShowcasePreviews((prev) => {
+  const removeAlbumImage = (index: number) => {
+    setAlbumImages((prev) => {
       const item = prev[index];
-      if (item) URL.revokeObjectURL(item.url);
+      if (item) URL.revokeObjectURL(item.previewUrl);
       return prev.filter((_, i) => i !== index);
     });
   };
 
-  const uploadShowcaseMutation = useMutation({
+  const createAlbumMutation = useMutation({
     mutationFn: async () => {
-      if (showcaseFiles.length === 0) throw new Error('Vui lòng chọn ít nhất 1 ảnh');
-      const formData = new FormData();
-      showcaseFiles.forEach((file) => {
-        formData.append('images', file);
-      });
-      if (showcaseTitle.trim()) formData.append('title', showcaseTitle.trim());
-      formData.append('order', String(showcaseOrder));
+      if (!albumTitle.trim()) throw new Error('Vui lòng nhập tên bộ ảnh');
+      if (albumImages.length === 0) throw new Error('Vui lòng chọn ít nhất 1 ảnh cho bộ ảnh');
+      if (albumImages.length > 20) throw new Error('Một bộ ảnh chỉ được tối đa 20 ảnh');
 
-      const res = await api.post('/admin/showcase/upload', formData);
+      const formData = new FormData();
+      formData.append('title', albumTitle.trim());
+      if (albumDescription.trim()) formData.append('description', albumDescription.trim());
+      formData.append('order', String(albumOrder));
+      formData.append('isActive', 'true');
+
+      albumImages.forEach((item) => {
+        formData.append('images', item.file);
+      });
+
+      const res = await api.post('/admin/showcase/albums', formData);
       return res.data;
     },
     onSuccess: (data: any) => {
-      toast.success(data?.message || `Đã tải ${showcaseFiles.length} ảnh lên Cloudinary và lưu vào Album`);
-      setUploadShowcaseOpen(false);
-      showcasePreviews.forEach((p) => URL.revokeObjectURL(p.url));
-      setShowcaseFiles([]);
-      setShowcasePreviews([]);
-      setShowcaseTitle('');
-      setShowcaseOrder(0);
+      toast.success(data?.message || 'Đã tạo bộ ảnh và tải lên Cloudinary thành công!');
+      setCreateAlbumOpen(false);
+      albumImages.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      setAlbumImages([]);
+      setAlbumTitle('');
+      setAlbumDescription('');
+      setAlbumOrder(0);
+      queryClient.invalidateQueries({ queryKey: ['showcase-albums'] });
       queryClient.invalidateQueries({ queryKey: ['showcase'] });
     },
-    onError: (err: any) => toast.error('Lỗi upload: ' + (err.response?.data?.message || err.message))
+    onError: (err: any) => toast.error('Lỗi tạo bộ ảnh: ' + (err.response?.data?.message || err.message)),
   });
 
-  const toggleShowcaseMutation = useMutation({
-    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      await api.patch(`/admin/showcase/${id}`, { isActive });
+  const toggleAlbumMutation = useMutation({
+    mutationFn: async ({ id, isActive, title }: { id: string; isActive: boolean; title?: string }) => {
+      await api.patch(`/admin/showcase/albums/${id}`, { isActive });
+      return { isActive, title };
     },
-    onSuccess: () => {
-      toast.success('Đã cập nhật trạng thái hiển thị');
+    onSuccess: (data) => {
+      toast.success(
+        data.isActive
+          ? `Đã bật bộ ảnh "${data.title || ''}" chạy slide ngoài màn hình đăng nhập!`
+          : `Đã ẩn bộ ảnh "${data.title || ''}"!`
+      );
+      queryClient.invalidateQueries({ queryKey: ['showcase-albums'] });
       queryClient.invalidateQueries({ queryKey: ['showcase'] });
     },
-    onError: () => toast.error('Có lỗi xảy ra')
+    onError: (err: any) => toast.error('Có lỗi xảy ra: ' + (err.response?.data?.message || err.message)),
   });
 
-  const deleteShowcaseMutation = useMutation({
+  const deleteAlbumMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/admin/showcase/${id}`);
+      const res = await api.delete(`/admin/showcase/albums/${id}`);
+      return res.data;
     },
-    onSuccess: () => {
-      toast.success('Đã xoá ảnh khỏi album');
+    onSuccess: (data: any) => {
+      toast.success(data?.message || 'Đã xoá toàn bộ bộ ảnh thành công!');
+      queryClient.invalidateQueries({ queryKey: ['showcase-albums'] });
       queryClient.invalidateQueries({ queryKey: ['showcase'] });
     },
-    onError: () => toast.error('Có lỗi khi xoá ảnh')
+    onError: (err: any) => toast.error('Có lỗi khi xoá bộ ảnh: ' + (err.response?.data?.message || err.message)),
   });
 
-  const updateOrderMutation = useMutation({
+  const updateAlbumOrderMutation = useMutation({
     mutationFn: async ({ id, order }: { id: string; order: number }) => {
-      await api.patch(`/admin/showcase/${id}`, { order });
+      await api.patch(`/admin/showcase/albums/${id}`, { order });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['showcase-albums'] });
       queryClient.invalidateQueries({ queryKey: ['showcase'] });
     },
-    onError: () => toast.error('Lỗi cập nhật thứ tự')
+    onError: () => toast.error('Lỗi cập nhật thứ tự bộ ảnh'),
   });
+
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -675,81 +707,141 @@ export default function DashboardPage() {
         {/* Tab Album Slider */}
         <TabsContent value="showcase">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-xl font-bold">Quản lý Album Slider (Màn hình Đăng nhập)</CardTitle>
+                <CardTitle className="text-xl font-bold flex items-center gap-2">
+                  <Layers className="text-primary w-5 h-5" />
+                  Quản lý Bộ ảnh Slider (Màn hình Đăng nhập)
+                </CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Các hình ảnh dưới đây được lưu trữ trên Cloudinary và tự động phát slide trên ứng dụng Desktop.
+                  Mỗi mục là một <strong>Bộ ảnh (Album)</strong>. Mỗi lượt tải tối đa 20 ảnh; ảnh gốc không giới hạn dung lượng và được tự động nén xuống dưới 1,5 MB/ảnh. Khi Ẩn/Hiện hay Xoá sẽ áp dụng cho toàn bộ album. Màn hình đăng nhập sẽ tự động chạy slide các bộ ảnh đang bật.
                 </p>
               </div>
 
-              <Dialog open={uploadShowcaseOpen} onOpenChange={setUploadShowcaseOpen}>
+              <Dialog open={createAlbumOpen} onOpenChange={setCreateAlbumOpen}>
                 <DialogTrigger
                   render={
                     <Button className="flex items-center gap-2">
-                      <UploadCloud size={16} /> Tải ảnh mới lên Cloudinary
+                      <Plus size={16} /> Thêm bộ ảnh mới
                     </Button>
                   }
                 />
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-xl">
                   <DialogHeader>
-                    <DialogTitle>Tải ảnh lên Album Slider</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-primary" />
+                      Thêm Bộ ảnh mới vào Slider
+                    </DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pt-2">
                     <div className="space-y-2">
+                      <Label className="font-semibold">
+                        Tên bộ ảnh <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        placeholder="VD: Album Cưới Studio Mùa Xuân 2026..."
+                        value={albumTitle}
+                        onChange={(e) => setAlbumTitle(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Mô tả bộ ảnh (Tùy chọn)</Label>
+                      <Input
+                        placeholder="VD: Chụp ngoại cảnh Đà Lạt..."
+                        value={albumDescription}
+                        onChange={(e) => setAlbumDescription(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label>Chọn các file ảnh (Tối đa 5MB/ảnh)</Label>
-                        <span className="text-xs text-muted-foreground">JPG, PNG, WEBP</span>
+                        <Label className="font-semibold">
+                          Chọn ảnh (Tối đa 20 ảnh / bộ)
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          JPG, PNG, WEBP, HEIC
+                        </span>
                       </div>
                       <Input
                         type="file"
                         multiple
                         accept="image/*"
-                        onChange={handleShowcaseFileChange}
+                        disabled={isCompressing || albumImages.length >= 20}
+                        onChange={handleAlbumFilesChange}
                       />
-                      <p className="text-[12px] text-muted-foreground">
-                        💡 Có thể chọn cùng lúc nhiều ảnh. Hệ thống sẽ tự động nén tối ưu hiển thị trên Cloudinary.
-                      </p>
+                      <div className="p-3 bg-muted/40 rounded-lg border border-border/50 text-xs text-muted-foreground space-y-1">
+                        <p className="flex items-center gap-1.5 font-medium text-foreground">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          Hệ thống tự động nén xuống dưới 1,5 MB/ảnh:
+                        </p>
+                        <p>
+                          Ảnh gốc không bị giới hạn dung lượng. Hệ thống giảm chất lượng và kích thước theo từng bước để bảo đảm file gửi lên Cloudinary nhỏ hơn 1,5 MB.
+                        </p>
+                      </div>
                     </div>
 
+                    {/* Compression in progress */}
+                    {isCompressing && (
+                      <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm animate-pulse">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{compressionProgress || 'Đang tự động nén ảnh...'}</span>
+                      </div>
+                    )}
+
                     {/* Previews List */}
-                    {showcasePreviews.length > 0 && (
+                    {albumImages.length > 0 && (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <Label className="text-xs font-semibold text-foreground">
-                            Đã chọn {showcasePreviews.length} ảnh (Tổng: {(showcaseFiles.reduce((acc, f) => acc + f.size, 0) / (1024 * 1024)).toFixed(2)} MB)
+                          <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                            <span>Đã chọn: {albumImages.length}/20 ảnh</span>
+                            <span className="text-muted-foreground font-normal">
+                              (Tổng: {(albumImages.reduce((acc, f) => acc + f.compressedSize, 0) / (1024 * 1024)).toFixed(2)} MB)
+                            </span>
                           </Label>
                           <button
                             type="button"
                             onClick={() => {
-                              showcasePreviews.forEach((p) => URL.revokeObjectURL(p.url));
-                              setShowcaseFiles([]);
-                              setShowcasePreviews([]);
+                              albumImages.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+                              setAlbumImages([]);
                             }}
                             className="text-xs text-destructive hover:underline"
                           >
                             Xoá tất cả
                           </button>
                         </div>
-                        <div className="max-h-52 overflow-y-auto grid grid-cols-3 gap-2 p-2 border rounded-xl bg-muted/20">
-                          {showcasePreviews.map((p, idx) => (
-                            <div key={p.id} className="relative group rounded-lg overflow-hidden border border-border bg-black/10 aspect-video flex flex-col justify-end">
+
+                        <div className="max-h-56 overflow-y-auto grid grid-cols-3 gap-2 p-2 border rounded-xl bg-muted/20">
+                          {albumImages.map((p, idx) => (
+                            <div
+                              key={idx}
+                              className="relative group rounded-lg overflow-hidden border border-border bg-black/10 aspect-video flex flex-col justify-end shadow-sm"
+                            >
                               <img
-                                src={p.url}
+                                src={p.previewUrl}
                                 alt={p.file.name}
                                 className="absolute inset-0 w-full h-full object-cover"
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                               <button
                                 type="button"
-                                onClick={() => removePreviewFile(idx)}
+                                onClick={() => removeAlbumImage(idx)}
                                 className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 text-white hover:bg-destructive flex items-center justify-center transition-colors z-10"
                                 title="Bỏ ảnh này"
                               >
                                 <X size={12} />
                               </button>
-                              <div className="relative z-10 p-1 text-[10px] text-white truncate font-medium drop-shadow">
-                                {(p.file.size / (1024 * 1024)).toFixed(1)}MB
+                              <div className="relative z-10 p-1 text-[10px] text-white flex items-center justify-between drop-shadow">
+                                <span className="font-mono">#{idx + 1}</span>
+                                {p.wasCompressed ? (
+                                  <span className="bg-amber-500/80 text-[9px] px-1 py-0.2 rounded text-white font-medium" title={`Gốc: ${formatFileSizeMB(p.originalSize)}`}>
+                                    Nén {formatFileSizeMB(p.compressedSize)}
+                                  </span>
+                                ) : (
+                                  <span className="bg-black/60 text-[9px] px-1 py-0.2 rounded text-white font-medium">
+                                    {formatFileSizeMB(p.compressedSize)}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -758,40 +850,31 @@ export default function DashboardPage() {
                     )}
 
                     <div className="space-y-2">
-                      <Label>Tiêu đề chung / Tên mô tả (Tùy chọn)</Label>
-                      <Input
-                        placeholder="VD: Album Cưới Studio 2026..."
-                        value={showcaseTitle}
-                        onChange={(e) => setShowcaseTitle(e.target.value)}
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        {showcaseFiles.length > 1
-                          ? 'Khi tải nhiều ảnh, tiêu đề sẽ tự động đánh số: [Tên] #1, [Tên] #2...'
-                          : 'Nếu để trống, hệ thống sẽ lấy tên file ảnh gốc.'}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
                       <Label>Thứ tự hiển thị bắt đầu (Số nhỏ chạy trước)</Label>
                       <Input
                         type="number"
-                        value={showcaseOrder}
-                        onChange={(e) => setShowcaseOrder(parseInt(e.target.value) || 0)}
+                        value={albumOrder}
+                        onChange={(e) => setAlbumOrder(parseInt(e.target.value) || 0)}
                       />
                     </div>
 
                     <Button
                       className="w-full"
-                      onClick={() => uploadShowcaseMutation.mutate()}
-                      disabled={uploadShowcaseMutation.isPending || showcaseFiles.length === 0}
+                      onClick={() => createAlbumMutation.mutate()}
+                      disabled={
+                        createAlbumMutation.isPending ||
+                        isCompressing ||
+                        albumImages.length === 0 ||
+                        !albumTitle.trim()
+                      }
                     >
-                      {uploadShowcaseMutation.isPending ? (
+                      {createAlbumMutation.isPending ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang nén và đẩy {showcaseFiles.length} ảnh lên Cloudinary...
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang tải {albumImages.length} ảnh lên Cloudinary & lưu Album...
                         </>
                       ) : (
                         <>
-                          <UploadCloud className="w-4 h-4 mr-2" /> Tải lên Cloudinary ({showcaseFiles.length} ảnh)
+                          <UploadCloud className="w-4 h-4 mr-2" /> Lưu Bộ ảnh & Tải lên Cloudinary ({albumImages.length} ảnh)
                         </>
                       )}
                     </Button>
@@ -801,142 +884,342 @@ export default function DashboardPage() {
             </CardHeader>
 
             <CardContent>
-              {showcaseLoading ? (
+              {albumsLoading ? (
                 <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <p className="text-sm">Đang tải danh sách album...</p>
+                  <p className="text-sm">Đang tải danh sách các bộ ảnh...</p>
                 </div>
-              ) : !showcaseImages || !Array.isArray(showcaseImages) || showcaseImages.length === 0 ? (
+              ) : !showcaseAlbums || !Array.isArray(showcaseAlbums) || showcaseAlbums.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-2xl border-border/60 p-8 text-center bg-muted/20">
                   <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-                    <ImageIcon className="w-7 h-7 text-primary" />
+                    <Layers className="w-7 h-7 text-primary" />
                   </div>
-                  <h3 className="text-base font-bold text-foreground mb-1">Chưa có ảnh nào trong Album Slider</h3>
+                  <h3 className="text-base font-bold text-foreground mb-1">Chưa có bộ ảnh nào trong Slider</h3>
                   <p className="text-sm text-muted-foreground max-w-sm mb-4">
-                    Hiện tại app Desktop đang chạy bằng ảnh mặc định cục bộ. Hãy tải ảnh đầu tiên lên Cloudinary để hiển thị!
+                    Tạo bộ ảnh đầu tiên (tối đa 20 ảnh) để trình chiếu slide ngoài màn hình đăng nhập ứng dụng Desktop!
                   </p>
-                  <Button onClick={() => setUploadShowcaseOpen(true)} className="flex items-center gap-2">
-                    <UploadCloud size={16} /> Tải ảnh ngay
+                  <Button onClick={() => setCreateAlbumOpen(true)} className="flex items-center gap-2">
+                    <Plus size={16} /> Thêm bộ ảnh ngay
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                  {showcaseImages.map((img: any, idx: number) => (
-                    <div
-                      key={img.id}
-                      className={`group relative rounded-xl border overflow-hidden transition-all shadow-sm hover:shadow-md flex flex-col bg-card ${
-                        img.isActive ? 'border-border' : 'border-dashed border-muted-foreground/30 opacity-70'
-                      }`}
-                    >
-                      {/* Image Preview */}
-                      <div className="relative aspect-video w-full bg-black/10 overflow-hidden">
-                        <img
-                          src={img.url}
-                          alt={img.title || 'Showcase'}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                        
-                        {/* Order badge */}
-                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white text-xs font-mono font-bold">
-                          #{img.order !== undefined ? img.order : idx + 1}
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {showcaseAlbums.map((album: any, idx: number) => {
+                    const photos: any[] = album.images || [];
+                    const photoCount = photos.length;
 
-                        {/* Status Badge */}
-                        <div className="absolute top-2 right-2">
+                    return (
+                      <div
+                        key={album.id}
+                        className={`group relative rounded-2xl border overflow-hidden transition-all shadow-sm hover:shadow-md flex flex-col bg-card ${
+                          album.isActive ? 'border-border' : 'border-dashed border-muted-foreground/30 opacity-75'
+                        }`}
+                      >
+                        {/* Header of Album Card */}
+                        <div className="p-4 pb-3 flex items-start justify-between gap-2 border-b border-border/40 bg-muted/10">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-mono font-bold">
+                                #{album.order !== undefined ? album.order : idx + 1}
+                              </span>
+                              <h4 className="font-bold text-base truncate text-foreground" title={album.title}>
+                                {album.title}
+                              </h4>
+                            </div>
+                            <p className="text-[12px] text-muted-foreground mt-0.5">
+                              {photoCount} / 20 ảnh • {formatDate(album.createdAt)}
+                            </p>
+                          </div>
+
+                          {/* Active Badge */}
                           <span
-                            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold backdrop-blur-md ${
-                              img.isActive
-                                ? 'bg-green-500/80 text-white'
-                                : 'bg-gray-500/80 text-white'
+                            className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 shrink-0 ${
+                              album.isActive
+                                ? 'bg-green-500/15 text-green-700 dark:text-green-400 border border-green-500/30'
+                                : 'bg-gray-500/15 text-muted-foreground border border-border'
                             }`}
                           >
-                            {img.isActive ? 'Đang chạy' : 'Đang ẩn'}
+                            <span className={`w-1.5 h-1.5 rounded-full ${album.isActive ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                            {album.isActive ? 'Đang chạy' : 'Đang ẩn'}
                           </span>
                         </div>
-                      </div>
 
-                      {/* Card Info */}
-                      <div className="p-3 flex-1 flex flex-col justify-between space-y-2">
-                        <div>
-                          <p className="font-semibold text-sm truncate" title={img.title}>
-                            {img.title || 'Không có tên'}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {formatDate(img.createdAt)}
-                          </p>
+                        {/* Photo Collage Preview */}
+                        <div
+                          className="relative h-44 w-full bg-black/10 overflow-hidden cursor-pointer group-hover:brightness-95 transition-all p-2"
+                          onClick={() => setSelectedAlbumForView(album)}
+                          title="Bấm để xem tất cả ảnh trong bộ này"
+                        >
+                          {photoCount === 0 ? (
+                            <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
+                              Chưa có ảnh trong bộ này
+                            </div>
+                          ) : photoCount === 1 ? (
+                            <div className="w-full h-full rounded-xl overflow-hidden border border-border/50">
+                              <img
+                                src={photos[0].url}
+                                alt={photos[0].title || album.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                loading="lazy"
+                              />
+                            </div>
+                          ) : photoCount === 2 ? (
+                            <div className="grid grid-cols-2 gap-1.5 w-full h-full">
+                              {photos.slice(0, 2).map((p, pIdx) => (
+                                <div key={pIdx} className="rounded-xl overflow-hidden border border-border/50">
+                                  <img
+                                    src={p.url}
+                                    alt={p.title || `Ảnh ${pIdx + 1}`}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : photoCount === 3 ? (
+                            <div className="grid grid-cols-3 gap-1.5 w-full h-full">
+                              <div className="col-span-2 rounded-xl overflow-hidden border border-border/50">
+                                <img
+                                  src={photos[0].url}
+                                  alt={photos[0].title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  loading="lazy"
+                                />
+                              </div>
+                              <div className="grid grid-rows-2 gap-1.5 h-full">
+                                {photos.slice(1, 3).map((p, pIdx) => (
+                                  <div key={pIdx} className="rounded-lg overflow-hidden border border-border/50">
+                                    <img
+                                      src={p.url}
+                                      alt={p.title}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-3 gap-1.5 w-full h-full">
+                              <div className="col-span-2 rounded-xl overflow-hidden border border-border/50">
+                                <img
+                                  src={photos[0].url}
+                                  alt={photos[0].title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  loading="lazy"
+                                />
+                              </div>
+                              <div className="grid grid-rows-2 gap-1.5 h-full">
+                                <div className="rounded-lg overflow-hidden border border-border/50">
+                                  <img
+                                    src={photos[1].url}
+                                    alt={photos[1].title}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                </div>
+                                <div className="relative rounded-lg overflow-hidden border border-border/50">
+                                  <img
+                                    src={photos[2].url}
+                                    alt={photos[2].title}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                  {photoCount > 3 && (
+                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xs font-bold backdrop-blur-xs">
+                                      +{photoCount - 2} ảnh
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
+                        {/* Description if any */}
+                        {album.description && (
+                          <p className="px-4 py-1 text-xs text-muted-foreground line-clamp-1 italic">
+                            {album.description}
+                          </p>
+                        )}
+
                         {/* Action Toolbar */}
-                        <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                          <div className="flex items-center gap-1">
-                            {/* Toggle Active */}
+                        <div className="p-3 pt-2 flex items-center justify-between border-t border-border/50 bg-card">
+                          <div className="flex items-center gap-1.5">
+                            {/* Toggle Entire Album Active/Inactive */}
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              className="h-8 w-8 p-0"
-                              title={img.isActive ? 'Ẩn ảnh này' : 'Bật hiển thị'}
-                              onClick={() => toggleShowcaseMutation.mutate({ id: img.id, isActive: !img.isActive })}
+                              className={`h-8 text-xs font-medium gap-1.5 ${
+                                album.isActive
+                                  ? 'text-green-600 hover:text-amber-600 hover:border-amber-500/50'
+                                  : 'text-muted-foreground hover:text-green-600 hover:border-green-500/50'
+                              }`}
+                              title={album.isActive ? 'Ẩn cả bộ ảnh này' : 'Bật chạy cả bộ ảnh này'}
+                              onClick={() =>
+                                toggleAlbumMutation.mutate({
+                                  id: album.id,
+                                  isActive: !album.isActive,
+                                  title: album.title,
+                                })
+                              }
                             >
-                              {img.isActive ? <Eye size={15} className="text-green-600" /> : <EyeOff size={15} className="text-muted-foreground" />}
+                              {album.isActive ? (
+                                <>
+                                  <Eye size={14} className="text-green-600" /> Ẩn bộ ảnh
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff size={14} /> Bật bộ ảnh
+                                </>
+                              )}
                             </Button>
 
-                            {/* Order adjust */}
+                            {/* View detail button */}
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 p-0"
-                              title="Tăng thứ tự ưu tiên (Giảm số)"
-                              onClick={() => updateOrderMutation.mutate({ id: img.id, order: Math.max(0, (img.order || 0) - 1) })}
+                              className="h-8 px-2 text-xs"
+                              title="Xem tất cả ảnh trong bộ này"
+                              onClick={() => setSelectedAlbumForView(album)}
                             >
-                              <ArrowUp size={15} />
-                            </Button>
-
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              title="Giảm thứ tự ưu tiên (Tăng số)"
-                              onClick={() => updateOrderMutation.mutate({ id: img.id, order: (img.order || 0) + 1 })}
-                            >
-                              <ArrowDown size={15} />
-                            </Button>
-
-                            {/* Open link */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              title="Mở ảnh gốc trên Cloudinary"
-                              onClick={() => window.open(img.url, '_blank')}
-                            >
-                              <ExternalLink size={14} />
+                              <ExternalLink size={14} className="mr-1" /> Xem ({photoCount})
                             </Button>
                           </div>
 
-                          {/* Delete Button */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            title="Xoá ảnh"
-                            onClick={() => {
-                              if (confirm('Bạn có chắc chắn muốn xoá ảnh này khỏi Album Slider?')) {
-                                deleteShowcaseMutation.mutate(img.id);
+                          <div className="flex items-center gap-1">
+                            {/* Order Adjust */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="Tăng thứ tự ưu tiên (chạy trước)"
+                              onClick={() =>
+                                updateAlbumOrderMutation.mutate({
+                                  id: album.id,
+                                  order: Math.max(0, (album.order || 0) - 1),
+                                })
                               }
-                            }}
-                          >
-                            <Trash2 size={15} />
-                          </Button>
+                            >
+                              <ArrowUp size={14} />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="Giảm thứ tự ưu tiên"
+                              onClick={() =>
+                                updateAlbumOrderMutation.mutate({
+                                  id: album.id,
+                                  order: (album.order || 0) + 1,
+                                })
+                              }
+                            >
+                              <ArrowDown size={14} />
+                            </Button>
+
+                            {/* Delete entire album */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              title="Xoá toàn bộ bộ ảnh"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Bạn có chắc chắn muốn xoá toàn bộ bộ ảnh "${album.title}"?\n\nHành động này sẽ xoá ${photoCount} ảnh trên Cloudinary và không thể khôi phục.`
+                                  )
+                                ) {
+                                  deleteAlbumMutation.mutate(album.id);
+                                }
+                              }}
+                            >
+                              <Trash2 size={15} />
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          {/* Modal xem chi tiết bộ ảnh */}
+          <Dialog
+            open={Boolean(selectedAlbumForView)}
+            onOpenChange={(open) => !open && setSelectedAlbumForView(null)}
+          >
+            <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+              <DialogHeader>
+                <div className="flex items-center justify-between pr-6">
+                  <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-primary" />
+                    {selectedAlbumForView?.title}
+                  </DialogTitle>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                      selectedAlbumForView?.isActive
+                        ? 'bg-green-500/15 text-green-700 dark:text-green-400'
+                        : 'bg-gray-500/15 text-muted-foreground'
+                    }`}
+                  >
+                    {selectedAlbumForView?.isActive ? 'Đang chạy slide' : 'Đang ẩn'}
+                  </span>
+                </div>
+                {selectedAlbumForView?.description && (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {selectedAlbumForView.description}
+                  </p>
+                )}
+              </DialogHeader>
+
+              <div className="flex-1 overflow-y-auto pt-2 space-y-4 pr-1">
+                <div className="text-xs text-muted-foreground flex items-center justify-between">
+                  <span>Tổng số: {selectedAlbumForView?.images?.length || 0} / 20 ảnh</span>
+                  <span>Tự động chuyển slide khi người dùng mở màn hình đăng nhập</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {selectedAlbumForView?.images?.map((photo: any, pIdx: number) => (
+                    <div
+                      key={pIdx}
+                      className="group relative rounded-xl overflow-hidden border border-border bg-black/10 aspect-video flex flex-col justify-end shadow-sm"
+                    >
+                      <img
+                        src={photo.url}
+                        alt={photo.title || `Ảnh #${pIdx + 1}`}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                      <a
+                        href={photo.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="absolute top-1.5 right-1.5 h-6 w-6 rounded-md bg-black/60 text-white hover:bg-primary flex items-center justify-center transition-colors z-10 opacity-0 group-hover:opacity-100"
+                        title="Mở ảnh gốc trên Cloudinary"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+
+                      <div className="relative z-10 p-1.5 text-[11px] text-white flex items-center justify-between drop-shadow">
+                        <span className="font-mono font-bold">#{pIdx + 1}</span>
+                        <span className="truncate max-w-[120px] text-[10px] opacity-80">
+                          {photo.title || `Ảnh #${pIdx + 1}`}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
+
 
         <TabsContent value="resources">
           <ResourceManager />
