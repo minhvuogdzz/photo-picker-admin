@@ -179,6 +179,7 @@ export default function DashboardPage() {
   const [albumImages, setAlbumImages] = useState<CompressionResult[]>([]);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState<string>('');
+  const [uploadProgressText, setUploadProgressText] = useState<string>('');
   const [selectedAlbumForView, setSelectedAlbumForView] = useState<any | null>(null);
 
   const handleAlbumFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -240,17 +241,50 @@ export default function DashboardPage() {
       if (albumImages.length === 0) throw new Error('Vui lòng chọn ít nhất 1 ảnh cho bộ ảnh');
       if (albumImages.length > 20) throw new Error('Một bộ ảnh chỉ được tối đa 20 ảnh');
 
-      const formData = new FormData();
-      formData.append('title', albumTitle.trim());
-      if (albumDescription.trim()) formData.append('description', albumDescription.trim());
-      formData.append('order', String(albumOrder));
-      formData.append('isActive', 'true');
+      const total = albumImages.length;
+      const uploadedPhotos: Array<{
+        url: string;
+        publicId: string;
+        title: string;
+        order: number;
+      }> = [];
 
-      albumImages.forEach((item) => {
-        formData.append('images', item.file);
+      // Upload từng ảnh lên Cloudinary qua endpoint đơn lẻ để tránh vượt ngưỡng 4.5MB của Vercel Serverless
+      for (let i = 0; i < total; i++) {
+        const item = albumImages[i];
+        setUploadProgressText(`Đang tải ảnh ${i + 1}/${total} lên Cloudinary...`);
+
+        const singleForm = new FormData();
+        singleForm.append('image', item.file);
+
+        const uploadRes = await api.post('/admin/showcase/upload-single', singleForm, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const uploadedData = uploadRes.data?.data;
+        if (!uploadedData?.url) {
+          throw new Error(`Tải ảnh thứ ${i + 1} (${item.file.name}) thất bại.`);
+        }
+
+        uploadedPhotos.push({
+          url: uploadedData.url,
+          publicId: uploadedData.publicId,
+          title: `${albumTitle.trim()} #${i + 1}`,
+          order: i,
+        });
+      }
+
+      setUploadProgressText('Đang lưu thông tin bộ ảnh...');
+
+      // Gửi danh sách ảnh đã upload lên Cloudinary dưới dạng JSON nhẹ (<2KB)
+      const res = await api.post('/admin/showcase/albums', {
+        title: albumTitle.trim(),
+        description: albumDescription.trim() || undefined,
+        order: Number(albumOrder) || 0,
+        isActive: true,
+        images: uploadedPhotos,
       });
 
-      const res = await api.post('/admin/showcase/albums', formData);
       return res.data;
     },
     onSuccess: (data: any) => {
@@ -261,10 +295,14 @@ export default function DashboardPage() {
       setAlbumTitle('');
       setAlbumDescription('');
       setAlbumOrder(0);
+      setUploadProgressText('');
       queryClient.invalidateQueries({ queryKey: ['showcase-albums'] });
       queryClient.invalidateQueries({ queryKey: ['showcase'] });
     },
-    onError: (err: any) => toast.error('Lỗi tạo bộ ảnh: ' + (err.response?.data?.message || err.message)),
+    onError: (err: any) => {
+      setUploadProgressText('');
+      toast.error('Lỗi tạo bộ ảnh: ' + (err.response?.data?.message || err.message));
+    },
   });
 
   const toggleAlbumMutation = useMutation({
@@ -870,7 +908,8 @@ export default function DashboardPage() {
                     >
                       {createAlbumMutation.isPending ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang tải {albumImages.length} ảnh lên Cloudinary & lưu Album...
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          {uploadProgressText || `Đang tải ${albumImages.length} ảnh lên Cloudinary...`}
                         </>
                       ) : (
                         <>
