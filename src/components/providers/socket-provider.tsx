@@ -12,12 +12,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     if (!token || !userId) return;
 
-    const socket = io('https://photo-picker-backend.vercel.app', {
+    const socket = io('https://photo-picker-backend.onrender.com', {
       transports: ['websocket'],
-      reconnectionAttempts: 2,
-      reconnectionDelay: 15000,
-      reconnectionDelayMax: 60000,
-      timeout: 5000,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 5000,
+      reconnectionDelayMax: 30000,
+      timeout: 10000,
     });
 
     socket.io.on('reconnect_failed', () => {

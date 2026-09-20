@@ -10,7 +10,7 @@ const getBaseUrl = () => {
       return 'http://localhost:3000';
     }
   }
-  return 'https://photo-picker-backend.vercel.app';
+  return 'https://photo-picker-backend.onrender.com';
 };
 
 const api = axios.create({
