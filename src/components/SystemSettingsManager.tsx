@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap } from 'lucide-react';
+import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap, Globe, Sparkles, LayoutTemplate } from 'lucide-react';
 
 const PRESET_DURATIONS = [
   { label: '5 phút', value: 5 },
@@ -22,6 +22,10 @@ const PRESET_DURATIONS = [
 export function SystemSettingsManager() {
   const queryClient = useQueryClient();
   const [durationMinutes, setDurationMinutes] = useState<number>(10);
+  const [companyUrl, setCompanyUrl] = useState('');
+  const [bannerBadge, setBannerBadge] = useState('');
+  const [bannerTitle, setBannerTitle] = useState('');
+  const [bannerSubtitle, setBannerSubtitle] = useState('');
 
   // 1. Fetch current system configurations
   const { data: configs, isLoading, isError, refetch } = useQuery({
@@ -38,6 +42,18 @@ export function SystemSettingsManager() {
       if (!isNaN(parsed) && parsed > 0) {
         setDurationMinutes(parsed);
       }
+    }
+    if (configs?.company_website_url) {
+      setCompanyUrl(configs.company_website_url);
+    }
+    if (configs?.launcher_banner_badge !== undefined) {
+      setBannerBadge(configs.launcher_banner_badge);
+    }
+    if (configs?.launcher_banner_title !== undefined) {
+      setBannerTitle(configs.launcher_banner_title);
+    }
+    if (configs?.launcher_banner_subtitle !== undefined) {
+      setBannerSubtitle(configs.launcher_banner_subtitle);
     }
   }, [configs]);
 
@@ -60,12 +76,73 @@ export function SystemSettingsManager() {
     },
   });
 
+  // 3. Mutation to update company website URL
+  const updateUrlMutation = useMutation({
+    mutationFn: async (url: string) => {
+      const res = await api.post('/admin/config', {
+        key: 'company_website_url',
+        value: url,
+        description: 'Link trang web công ty hiển thị ở footer ứng dụng desktop',
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-configs'] });
+      toast.success('Đã lưu link website công ty!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Không thể lưu link website');
+    },
+  });
+
+  // 4. Mutation to update launcher banner
+  const updateBannerMutation = useMutation({
+    mutationFn: async (data: { badge: string; title: string; subtitle: string }) => {
+      await Promise.all([
+        api.post('/admin/config', {
+          key: 'launcher_banner_badge',
+          value: data.badge,
+          description: 'Nhãn badge banner trang chủ desktop (ví dụ: MVD Studio Suite · Hệ thống sẵn sàng)',
+        }),
+        api.post('/admin/config', {
+          key: 'launcher_banner_title',
+          value: data.title,
+          description: 'Tiêu đề lời chào banner trang chủ (hỗ trợ {name}, ví dụ: Chào mừng trở lại, {name})',
+        }),
+        api.post('/admin/config', {
+          key: 'launcher_banner_subtitle',
+          value: data.subtitle,
+          description: 'Mô tả hoặc thông báo studio hiển thị dưới tiêu đề trang chủ',
+        }),
+      ]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-configs'] });
+      toast.success('Đã lưu cấu hình banner trang chủ desktop thành công!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Không thể lưu cấu hình banner');
+    },
+  });
+
   const handleSave = () => {
     if (isNaN(durationMinutes) || durationMinutes < 1) {
       toast.error('Vui lòng nhập thời gian phiên hợp lệ (tối thiểu 1 phút)');
       return;
     }
     updateMutation.mutate(durationMinutes);
+  };
+
+  const handleSaveUrl = () => {
+    updateUrlMutation.mutate(companyUrl.trim());
+  };
+
+  const handleSaveBanner = () => {
+    updateBannerMutation.mutate({
+      badge: bannerBadge.trim(),
+      title: bannerTitle.trim(),
+      subtitle: bannerSubtitle.trim(),
+    });
   };
 
   return (
@@ -207,6 +284,155 @@ export function SystemSettingsManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Company Website URL Config */}
+      <Card className="border border-border/80 shadow-sm">
+        <CardHeader>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <Globe size={18} />
+              </div>
+              <CardTitle className="text-lg font-bold">Link Website Công Ty</CardTitle>
+            </div>
+            <CardDescription className="text-sm text-muted-foreground pt-1">
+              Link trang web sẽ hiển thị ở footer của ứng dụng desktop. Để trống nếu không muốn hiển thị.
+            </CardDescription>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="space-y-2 max-w-lg">
+            <Label htmlFor="company-url-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              URL trang web
+            </Label>
+            <Input
+              id="company-url-input"
+              type="url"
+              placeholder="https://mvdphotoshopacademy.com"
+              value={companyUrl}
+              onChange={(e) => setCompanyUrl(e.target.value)}
+              className="text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Nhập đầy đủ URL bao gồm https:// (ví dụ: https://mvdphotoshopacademy.com)
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              onClick={handleSaveUrl}
+              disabled={updateUrlMutation.isPending}
+              className="gap-2"
+            >
+              {updateUrlMutation.isPending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Đang lưu...
+                </>
+              ) : (
+                <>
+                  <Globe size={16} />
+                  Lưu link website
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Desktop Launcher Header Banner Config */}
+      <Card className="border border-border/80 shadow-sm">
+        <CardHeader>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+                <LayoutTemplate size={18} />
+              </div>
+              <CardTitle className="text-lg font-bold">Tùy Chỉnh Banner Trang Chủ Desktop (Launcher Header)</CardTitle>
+            </div>
+            <CardDescription className="text-sm text-muted-foreground pt-1">
+              Tùy biến lời chào, nhãn badge trạng thái và thông báo hiển thị ở đầu trang chủ ứng dụng desktop. Để trống sẽ dùng mặc định của hệ thống.
+            </CardDescription>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="banner-badge-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Nhãn Badge Trạng Thái
+              </Label>
+              <Input
+                id="banner-badge-input"
+                type="text"
+                placeholder="MVD Studio Suite · Hệ thống sẵn sàng"
+                value={bannerBadge}
+                onChange={(e) => setBannerBadge(e.target.value)}
+                className="text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Nhãn nhỏ trên cùng (ví dụ: MVD Studio Suite · Hệ thống sẵn sàng)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="banner-title-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Tiêu Đề / Lời Chào
+              </Label>
+              <Input
+                id="banner-title-input"
+                type="text"
+                placeholder="Chào buổi tối, {name}"
+                value={bannerTitle}
+                onChange={(e) => setBannerTitle(e.target.value)}
+                className="text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Dùng <code className="text-primary font-mono font-bold">{"{name}"}</code> để tự động chèn tên người dùng (ví dụ: Chào mừng, {"{name}"})
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="banner-subtitle-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Mô Tả / Thông Báo Studio
+            </Label>
+            <Input
+              id="banner-subtitle-input"
+              type="text"
+              placeholder="Trung tâm điều phối ứng dụng tự động hoá studio. Chọn công cụ bên dưới để bắt đầu luồng làm việc."
+              value={bannerSubtitle}
+              onChange={(e) => setBannerSubtitle(e.target.value)}
+              className="text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Dòng thông báo hoặc lời nhắc hiển thị dưới tiêu đề chính
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button
+              onClick={handleSaveBanner}
+              disabled={updateBannerMutation.isPending}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+            >
+              {updateBannerMutation.isPending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Đang lưu banner...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  Lưu banner trang chủ
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
