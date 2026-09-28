@@ -26,6 +26,9 @@ export function SystemSettingsManager() {
   const [bannerBadge, setBannerBadge] = useState('');
   const [bannerTitle, setBannerTitle] = useState('');
   const [bannerSubtitle, setBannerSubtitle] = useState('');
+  // Mặc định BẬT: backend cũng coi "chưa có cấu hình" là bật, để một lần deploy không
+  // bao giờ tự làm hỏng các máy còn chạy app cũ.
+  const [legacyCompat, setLegacyCompat] = useState(true);
 
   // 1. Fetch current system configurations
   const { data: configs, isLoading, isError, refetch } = useQuery({
@@ -54,6 +57,9 @@ export function SystemSettingsManager() {
     }
     if (configs?.launcher_banner_subtitle !== undefined) {
       setBannerSubtitle(configs.launcher_banner_subtitle);
+    }
+    if (configs?.legacy_resource_compat !== undefined) {
+      setLegacyCompat(String(configs.legacy_resource_compat).trim().toLowerCase() !== 'false');
     }
   }, [configs]);
 
@@ -125,6 +131,36 @@ export function SystemSettingsManager() {
     },
   });
 
+  // 5. Mutation: chế độ tương thích app cũ cho Kho Tài Nguyên
+  const updateLegacyCompatMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await api.post('/admin/config', {
+        key: 'legacy_resource_compat',
+        value: enabled ? 'true' : 'false',
+        description:
+          'BẬT = vẫn trả link tải cho app desktop <= 2.4.4 (chưa cập nhật). TẮT = chỉ client đã đăng nhập và còn quyền mới tải được.',
+      });
+      return res.data;
+    },
+    onSuccess: (_d, enabled) => {
+      queryClient.invalidateQueries({ queryKey: ['system-configs'] });
+      toast.success(
+        enabled
+          ? 'Đã BẬT chế độ tương thích app cũ — máy chưa cập nhật vẫn tải được tài nguyên.'
+          : 'Đã TẮT chế độ tương thích — từ giờ chỉ app 2.5.0+ đã đăng nhập mới tải được.',
+      );
+    },
+    onError: (err: any) => {
+      setLegacyCompat((prev) => !prev); // revert switch khi lưu thất bại
+      toast.error(err.response?.data?.message || 'Không thể lưu chế độ tương thích');
+    },
+  });
+
+  const handleToggleLegacyCompat = (enabled: boolean) => {
+    setLegacyCompat(enabled);
+    updateLegacyCompatMutation.mutate(enabled);
+  };
+
   const handleSave = () => {
     if (isNaN(durationMinutes) || durationMinutes < 1) {
       toast.error('Vui lòng nhập thời gian phiên hợp lệ (tối thiểu 1 phút)');
@@ -147,6 +183,76 @@ export function SystemSettingsManager() {
 
   return (
     <div className="space-y-6 max-w-4xl">
+      {/* Cutover tương thích app cũ — Kho Tài Nguyên */}
+      <Card
+        className={`border shadow-sm ${
+          legacyCompat ? 'border-amber-500/40 bg-amber-500/5' : 'border-emerald-500/40 bg-emerald-500/5'
+        }`}
+      >
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
+                legacyCompat
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+              }`}
+            >
+              <ShieldAlert size={18} />
+            </div>
+            <CardTitle className="text-lg font-bold">
+              Chế Độ Tương Thích App Cũ (Kho Tài Nguyên)
+            </CardTitle>
+          </div>
+          <CardDescription className="text-sm text-muted-foreground pt-1">
+            App desktop từ 2.4.4 trở xuống lấy link tải ngay trong danh sách công khai và gọi
+            endpoint tải mà không kèm token. Vì người dùng có thể bấm &quot;để sau&quot; ở hộp
+            thoại cập nhật, hãy giữ BẬT cho tới khi phần lớn máy đã lên 2.5.0+.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="flex items-start justify-between gap-4 rounded-xl border bg-background/60 p-4">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold">
+                {legacyCompat ? 'ĐANG BẬT — ưu tiên không làm hỏng app cũ' : 'ĐANG TẮT — đã siết bảo mật'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {legacyCompat
+                  ? 'Máy chưa cập nhật vẫn tải được tài nguyên bình thường. Đổi lại, link Google Drive vẫn còn lộ ra ngoài cho người chưa mua gói.'
+                  : 'Chỉ app 2.5.0+ đã đăng nhập và còn quyền mới tải được. Máy chưa cập nhật sẽ KHÔNG tải được tài nguyên nữa.'}
+              </p>
+            </div>
+
+            <Button
+              variant={legacyCompat ? 'default' : 'outline'}
+              size="sm"
+              disabled={updateLegacyCompatMutation.isPending}
+              onClick={() => handleToggleLegacyCompat(!legacyCompat)}
+              className="gap-1.5 shrink-0"
+            >
+              {updateLegacyCompatMutation.isPending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : legacyCompat ? (
+                <ShieldAlert size={14} />
+              ) : (
+                <CheckCircle2 size={14} />
+              )}
+              {legacyCompat ? 'Tắt tương thích (siết bảo mật)' : 'Bật lại tương thích'}
+            </Button>
+          </div>
+
+          <div className="flex gap-2 text-xs text-muted-foreground rounded-lg border border-dashed p-3">
+            <Info size={14} className="shrink-0 mt-0.5" />
+            <span>
+              Thứ tự khuyến nghị: phát hành app 2.5.0 (tag + bump package.json) &rarr; deploy
+              backend/admin với cờ này BẬT &rarr; chờ người dùng cập nhật &rarr; quay lại đây TẮT
+              cờ để đóng lỗ hổng. Cờ có hiệu lực trong vòng 30 giây.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="border border-border/80 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
