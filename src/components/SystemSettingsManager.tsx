@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap, Globe, Sparkles, LayoutTemplate } from 'lucide-react';
+import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap, Globe, Sparkles, LayoutTemplate, Phone } from 'lucide-react';
 
 const PRESET_DURATIONS = [
   { label: '5 phút', value: 5 },
@@ -23,6 +23,7 @@ export function SystemSettingsManager() {
   const queryClient = useQueryClient();
   const [durationMinutes, setDurationMinutes] = useState<number>(10);
   const [companyUrl, setCompanyUrl] = useState('');
+  const [supportZalo, setSupportZalo] = useState('');
   const [bannerBadge, setBannerBadge] = useState('');
   const [bannerTitle, setBannerTitle] = useState('');
   const [bannerSubtitle, setBannerSubtitle] = useState('');
@@ -48,6 +49,9 @@ export function SystemSettingsManager() {
     }
     if (configs?.company_website_url) {
       setCompanyUrl(configs.company_website_url);
+    }
+    if (configs?.support_zalo_phone !== undefined) {
+      setSupportZalo(configs.support_zalo_phone);
     }
     if (configs?.launcher_banner_badge !== undefined) {
       setBannerBadge(configs.launcher_banner_badge);
@@ -100,6 +104,34 @@ export function SystemSettingsManager() {
       toast.error(err.response?.data?.message || 'Không thể lưu link website');
     },
   });
+
+  // 3b. Mutation: số Zalo hỗ trợ hiện trong app desktop
+  const updateZaloMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      const res = await api.post('/admin/config', {
+        key: 'support_zalo_phone',
+        value: phone,
+        description: 'Số Zalo hỗ trợ hiển thị trong app desktop (popup gia hạn, màn hình hệ thống)',
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-configs'] });
+      toast.success('Đã lưu số Zalo hỗ trợ!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Không thể lưu số Zalo hỗ trợ');
+    },
+  });
+
+  const handleSaveZalo = () => {
+    const trimmed = supportZalo.trim();
+    if (!trimmed) {
+      toast.error('Vui lòng nhập số Zalo hỗ trợ.');
+      return;
+    }
+    updateZaloMutation.mutate(trimmed);
+  };
 
   // 4. Mutation to update launcher banner
   const updateBannerMutation = useMutation({
@@ -388,6 +420,59 @@ export function SystemSettingsManager() {
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Support Zalo Config */}
+      <Card className="border border-border/80 shadow-sm">
+        <CardHeader>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-500">
+                <Phone size={18} />
+              </div>
+              <CardTitle className="text-lg font-bold">Số Zalo Hỗ Trợ</CardTitle>
+            </div>
+            <CardDescription className="text-sm text-muted-foreground pt-1">
+              Hiển thị ở popup cảnh báo sắp hết hạn và màn hình Hệ thống trong app desktop.
+              Chưa cấu hình thì app sẽ ẩn hẳn phần liên hệ (không hiện số sai).
+            </CardDescription>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="space-y-2 max-w-lg">
+            <Label htmlFor="support-zalo-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Số điện thoại Zalo
+            </Label>
+            <Input
+              id="support-zalo-input"
+              type="tel"
+              placeholder="0869528304"
+              value={supportZalo}
+              onChange={(e) => setSupportZalo(e.target.value)}
+              className="text-sm font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              App sẽ mở https://zalo.me/&lt;số này&gt; khi khách bấm vào.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <Button onClick={handleSaveZalo} disabled={updateZaloMutation.isPending} className="gap-2">
+              {updateZaloMutation.isPending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Đang lưu...
+                </>
+              ) : (
+                <>
+                  <Phone size={16} />
+                  Lưu số Zalo
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
