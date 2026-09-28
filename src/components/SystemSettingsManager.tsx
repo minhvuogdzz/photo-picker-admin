@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap, Globe, Sparkles, LayoutTemplate, Phone } from 'lucide-react';
+import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap, Globe, Sparkles, LayoutTemplate, Phone, Mail, Send, KeyRound, ExternalLink } from 'lucide-react';
 
 const PRESET_DURATIONS = [
   { label: '5 phút', value: 5 },
@@ -30,6 +30,14 @@ export function SystemSettingsManager() {
   // Mặc định BẬT: backend cũng coi "chưa có cấu hình" là bật, để một lần deploy không
   // bao giờ tự làm hỏng các máy còn chạy app cũ.
   const [legacyCompat, setLegacyCompat] = useState(true);
+
+  // Cấu hình dịch vụ Email (HTTPS API & SMTP)
+  const [emailProvider, setEmailProvider] = useState<'auto' | 'resend' | 'brevo' | 'smtp'>('auto');
+  const [resendApiKey, setResendApiKey] = useState('');
+  const [brevoApiKey, setBrevoApiKey] = useState('');
+  const [emailFromAddress, setEmailFromAddress] = useState('');
+  const [emailFromName, setEmailFromName] = useState('MVD Academy');
+  const [testRecipient, setTestRecipient] = useState('ougvn.it2@gmail.com');
 
   // 1. Fetch current system configurations
   const { data: configs, isLoading, isError, refetch } = useQuery({
@@ -64,6 +72,21 @@ export function SystemSettingsManager() {
     }
     if (configs?.legacy_resource_compat !== undefined) {
       setLegacyCompat(String(configs.legacy_resource_compat).trim().toLowerCase() !== 'false');
+    }
+    if (configs?.email_provider) {
+      setEmailProvider(configs.email_provider as any);
+    }
+    if (configs?.resend_api_key) {
+      setResendApiKey(configs.resend_api_key);
+    }
+    if (configs?.brevo_api_key) {
+      setBrevoApiKey(configs.brevo_api_key);
+    }
+    if (configs?.email_from_address) {
+      setEmailFromAddress(configs.email_from_address);
+    }
+    if (configs?.email_from_name) {
+      setEmailFromName(configs.email_from_name);
     }
   }, [configs]);
 
@@ -211,6 +234,56 @@ export function SystemSettingsManager() {
       title: bannerTitle.trim(),
       subtitle: bannerSubtitle.trim(),
     });
+  };
+
+  // 6. Mutation to update Email settings
+  const saveEmailMutation = useMutation({
+    mutationFn: async () => {
+      await Promise.all([
+        api.post('/admin/config', { key: 'email_provider', value: emailProvider, description: 'Dịch vụ gửi email (auto/resend/brevo/smtp)' }),
+        api.post('/admin/config', { key: 'resend_api_key', value: resendApiKey.trim(), description: 'API Key dịch vụ Resend.com (HTTPS Port 443)' }),
+        api.post('/admin/config', { key: 'brevo_api_key', value: brevoApiKey.trim(), description: 'API Key dịch vụ Brevo.com (HTTPS Port 443)' }),
+        api.post('/admin/config', { key: 'email_from_address', value: emailFromAddress.trim(), description: 'Địa chỉ email gửi đi' }),
+        api.post('/admin/config', { key: 'email_from_name', value: emailFromName.trim(), description: 'Tên hiển thị người gửi email' }),
+      ]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-configs'] });
+      toast.success('Đã lưu cấu hình dịch vụ Email thành công!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Không thể lưu cấu hình Email');
+    },
+  });
+
+  // 7. Mutation to test sending an email
+  const testEmailMutation = useMutation({
+    mutationFn: async (to: string) => {
+      const res = await api.post('/admin/email/test', { to });
+      return res.data;
+    },
+    onSuccess: (data: any) => {
+      if (data?.success) {
+        toast.success(data?.data?.message || 'Gửi email thử nghiệm thành công! Hãy kiểm tra hộp thư.');
+      } else {
+        toast.error(data?.data?.message || 'Gửi email thử nghiệm thất bại.');
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Lỗi khi gửi email thử nghiệm');
+    },
+  });
+
+  const handleSaveEmail = () => {
+    saveEmailMutation.mutate();
+  };
+
+  const handleTestEmail = () => {
+    if (!testRecipient.trim() || !testRecipient.includes('@')) {
+      toast.error('Vui lòng nhập địa chỉ email hợp lệ để nhận thử nghiệm');
+      return;
+    }
+    testEmailMutation.mutate(testRecipient.trim());
   };
 
   return (
@@ -620,6 +693,193 @@ export function SystemSettingsManager() {
                 </>
               )}
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cấu Hình Dịch Vụ Gửi Email (HTTPS API & SMTP) */}
+      <Card className="border border-border/80 shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-500/10 border border-indigo-500/20 text-indigo-500">
+                <Mail size={18} />
+              </div>
+              <CardTitle className="text-lg font-bold">
+                Cấu Hình Dịch Vụ Gửi Email (Thông Báo & Cấp Key)
+              </CardTitle>
+            </div>
+            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium">
+              Hỗ trợ HTTPS 443 (Render Không Chặn)
+            </span>
+          </div>
+          <CardDescription className="text-sm text-muted-foreground pt-1">
+            Máy chủ Render Free chặn các cổng SMTP thông thường (465, 587). Bạn có thể cấu hình API Key dịch vụ <strong>Resend</strong> hoặc <strong>Brevo</strong> (miễn phí) để gửi email kích hoạt bản quyền tức thì qua cổng HTTPS 443.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Dịch Vụ Gửi Email (Provider)
+              </Label>
+              <select
+                value={emailProvider}
+                onChange={(e) => setEmailProvider(e.target.value as any)}
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="auto">Tự động (Ưu tiên Resend ➔ Brevo ➔ SMTP)</option>
+                <option value="resend">Resend.com (Khuyên dùng - Cổng 443)</option>
+                <option value="brevo">Brevo / Sendinblue (Cổng 443)</option>
+                <option value="smtp">Gmail SMTP (Cần server mở cổng 465/587)</option>
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                Khuyên chọn Resend hoặc Brevo để tránh bị chặn kết nối trên cloud.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Tên Hiển Thị Người Gửi (From Name)
+              </Label>
+              <Input
+                type="text"
+                placeholder="MVD Academy"
+                value={emailFromName}
+                onChange={(e) => setEmailFromName(e.target.value)}
+                className="text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Tên hiển thị khi khách nhận được email (VD: MVD Academy).
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Resend API Key (Khuyên dùng)
+              </Label>
+              <a
+                href="https://resend.com/api-keys"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                Lấy API key tại Resend.com <ExternalLink size={12} />
+              </a>
+            </div>
+            <Input
+              type="password"
+              placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              value={resendApiKey}
+              onChange={(e) => setResendApiKey(e.target.value)}
+              className="text-sm font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Miễn phí 3.000 mail/tháng. Đăng ký tại resend.com và dán key dạng <code className="font-mono text-primary font-bold">re_...</code> vào đây.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Brevo API Key (Tùy chọn)
+              </Label>
+              <a
+                href="https://app.brevo.com/settings/keys/api"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                Lấy API key tại Brevo.com <ExternalLink size={12} />
+              </a>
+            </div>
+            <Input
+              type="password"
+              placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxx"
+              value={brevoApiKey}
+              onChange={(e) => setBrevoApiKey(e.target.value)}
+              className="text-sm font-mono"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Miễn phí 300 mail/ngày. Hỗ trợ gửi từ địa chỉ Gmail đã xác minh.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Địa Chỉ Email Người Gửi (From Email)
+            </Label>
+            <Input
+              type="text"
+              placeholder="onboarding@resend.dev hoặc ougvn.it2@gmail.com"
+              value={emailFromAddress}
+              onChange={(e) => setEmailFromAddress(e.target.value)}
+              className="text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Nếu dùng Resend chưa có tên miền riêng, để mặc định: <code className="font-mono text-primary font-bold">onboarding@resend.dev</code>. Nếu dùng Brevo: điền email Gmail của bạn.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2 border-t">
+            <Button
+              onClick={handleSaveEmail}
+              disabled={saveEmailMutation.isPending}
+              className="gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
+            >
+              {saveEmailMutation.isPending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Đang lưu cấu hình...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} />
+                  Lưu cấu hình Email
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Hộp thử nghiệm gửi mail */}
+          <div className="mt-4 pt-4 border-t bg-muted/30 p-4 rounded-xl space-y-3">
+            <div className="flex items-center gap-2">
+              <Send size={16} className="text-primary" />
+              <p className="text-sm font-semibold">Thử Nghiệm Gửi Thư Trực Tiếp</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Nhập email của bạn để kiểm tra xem hệ thống có gửi thư thành công với cấu hình hiện tại hay không:
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <Input
+                type="email"
+                placeholder="Nhập email nhận thử nghiệm..."
+                value={testRecipient}
+                onChange={(e) => setTestRecipient(e.target.value)}
+                className="text-sm max-w-sm"
+              />
+              <Button
+                variant="outline"
+                onClick={handleTestEmail}
+                disabled={testEmailMutation.isPending}
+                className="gap-2 shrink-0 border-primary/40 hover:bg-primary/10"
+              >
+                {testEmailMutation.isPending ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Đang gửi thử...
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} />
+                    Gửi Thử Ngay
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
