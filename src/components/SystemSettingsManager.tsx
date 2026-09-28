@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap, Globe, Sparkles, LayoutTemplate, Phone, Mail, Send, KeyRound, ExternalLink } from 'lucide-react';
+import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap, Globe, Sparkles, LayoutTemplate, Phone, Mail, Send, KeyRound, ExternalLink, Monitor } from 'lucide-react';
 
 const PRESET_DURATIONS = [
   { label: '5 phút', value: 5 },
@@ -27,6 +27,11 @@ export function SystemSettingsManager() {
   const [bannerBadge, setBannerBadge] = useState('');
   const [bannerTitle, setBannerTitle] = useState('');
   const [bannerSubtitle, setBannerSubtitle] = useState('');
+  // Màn hình chào mừng (Welcome Screen) desktop app
+  const [welcomeTitle, setWelcomeTitle] = useState('MVD Tech & Design Studio');
+  const [welcomeViSubtitle, setWelcomeViSubtitle] = useState('Chào mừng bạn đến với hệ sinh thái');
+  const [welcomeEnSubtitle, setWelcomeEnSubtitle] = useState('Welcome to the ecosystem of');
+
   // Mặc định BẬT: backend cũng coi "chưa có cấu hình" là bật, để một lần deploy không
   // bao giờ tự làm hỏng các máy còn chạy app cũ.
   const [legacyCompat, setLegacyCompat] = useState(true);
@@ -36,7 +41,7 @@ export function SystemSettingsManager() {
   const [resendApiKey, setResendApiKey] = useState('');
   const [brevoApiKey, setBrevoApiKey] = useState('');
   const [emailFromAddress, setEmailFromAddress] = useState('');
-  const [emailFromName, setEmailFromName] = useState('MVD Academy');
+  const [emailFromName, setEmailFromName] = useState('MVD Tech & Design Studio');
   const [testRecipient, setTestRecipient] = useState('ougvn.it2@gmail.com');
 
   // 1. Fetch current system configurations
@@ -69,6 +74,15 @@ export function SystemSettingsManager() {
     }
     if (configs?.launcher_banner_subtitle !== undefined) {
       setBannerSubtitle(configs.launcher_banner_subtitle);
+    }
+    if (configs?.welcome_screen_title !== undefined) {
+      setWelcomeTitle(configs.welcome_screen_title);
+    }
+    if (configs?.welcome_screen_vi_subtitle !== undefined) {
+      setWelcomeViSubtitle(configs.welcome_screen_vi_subtitle);
+    }
+    if (configs?.welcome_screen_en_subtitle !== undefined) {
+      setWelcomeEnSubtitle(configs.welcome_screen_en_subtitle);
     }
     if (configs?.legacy_resource_compat !== undefined) {
       setLegacyCompat(String(configs.legacy_resource_compat).trim().toLowerCase() !== 'false');
@@ -163,7 +177,7 @@ export function SystemSettingsManager() {
         api.post('/admin/config', {
           key: 'launcher_banner_badge',
           value: data.badge,
-          description: 'Nhãn badge banner trang chủ desktop (ví dụ: MVD Studio Suite · Hệ thống sẵn sàng)',
+          description: 'Nhãn badge banner trang chủ desktop (ví dụ: MVD Tech & Design Studio · Hệ thống sẵn sàng)',
         }),
         api.post('/admin/config', {
           key: 'launcher_banner_title',
@@ -185,6 +199,44 @@ export function SystemSettingsManager() {
       toast.error(err.response?.data?.message || 'Không thể lưu cấu hình banner');
     },
   });
+
+  // 4b. Mutation to update welcome screen
+  const updateWelcomeMutation = useMutation({
+    mutationFn: async (data: { title: string; viSubtitle: string; enSubtitle: string }) => {
+      await Promise.all([
+        api.post('/admin/config', {
+          key: 'welcome_screen_title',
+          value: data.title,
+          description: 'Tiêu đề hiển thị trên màn hình chào mừng Desktop App',
+        }),
+        api.post('/admin/config', {
+          key: 'welcome_screen_vi_subtitle',
+          value: data.viSubtitle,
+          description: 'Phụ đề Tiếng Việt hiển thị trên màn hình chào mừng Desktop App',
+        }),
+        api.post('/admin/config', {
+          key: 'welcome_screen_en_subtitle',
+          value: data.enSubtitle,
+          description: 'Phụ đề Tiếng Anh hiển thị trên màn hình chào mừng Desktop App',
+        }),
+      ]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-configs'] });
+      toast.success('Đã lưu cấu hình màn hình chào mừng desktop thành công!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Không thể lưu cấu hình màn hình chào');
+    },
+  });
+
+  const handleSaveWelcome = () => {
+    updateWelcomeMutation.mutate({
+      title: welcomeTitle.trim() || 'MVD Tech & Design Studio',
+      viSubtitle: welcomeViSubtitle.trim() || 'Chào mừng bạn đến với hệ sinh thái',
+      enSubtitle: welcomeEnSubtitle.trim() || 'Welcome to the ecosystem of',
+    });
+  };
 
   // 5. Mutation: chế độ tương thích app cũ cho Kho Tài Nguyên
   const updateLegacyCompatMutation = useMutation({
@@ -630,13 +682,13 @@ export function SystemSettingsManager() {
               <Input
                 id="banner-badge-input"
                 type="text"
-                placeholder="MVD Studio Suite · Hệ thống sẵn sàng"
+                placeholder="MVD Tech & Design Studio · Hệ thống sẵn sàng"
                 value={bannerBadge}
                 onChange={(e) => setBannerBadge(e.target.value)}
                 className="text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
-                Nhãn nhỏ trên cùng (ví dụ: MVD Studio Suite · Hệ thống sẵn sàng)
+                Nhãn nhỏ trên cùng (ví dụ: MVD Tech & Design Studio · Hệ thống sẵn sàng)
               </p>
             </div>
 
@@ -697,6 +749,123 @@ export function SystemSettingsManager() {
         </CardContent>
       </Card>
 
+      {/* Tùy Chỉnh Màn Hình Khởi Động (Welcome Screen) */}
+      <Card className="border border-border/80 shadow-sm">
+        <CardHeader>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-500">
+                <Monitor size={18} />
+              </div>
+              <CardTitle className="text-lg font-bold">Tùy Chỉnh Màn Hình Chào Mừng (Welcome Screen)</CardTitle>
+            </div>
+            <CardDescription className="text-sm text-muted-foreground pt-1">
+              Tùy biến câu chào và phụ đề song ngữ hiển thị kèm logo thương hiệu khi khởi động ứng dụng desktop. Dữ liệu được đồng bộ trực tiếp từ backend về máy khách.
+            </CardDescription>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="welcome-title-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Tên / Tiêu Đề Hệ Thống (Title)
+            </Label>
+            <Input
+              id="welcome-title-input"
+              type="text"
+              placeholder="MVD Tech & Design Studio"
+              value={welcomeTitle}
+              onChange={(e) => setWelcomeTitle(e.target.value)}
+              className="text-sm font-semibold"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Tiêu đề chính lớn nhất nằm giữa màn hình chào (mặc định: <span className="font-semibold text-primary">MVD Tech & Design Studio</span>)
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="welcome-vi-subtitle-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Phụ Đề Tiếng Việt (Phase 1)
+              </Label>
+              <Input
+                id="welcome-vi-subtitle-input"
+                type="text"
+                placeholder="Chào mừng bạn đến với hệ sinh thái"
+                value={welcomeViSubtitle}
+                onChange={(e) => setWelcomeViSubtitle(e.target.value)}
+                className="text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Dòng chữ nhỏ chạy trước trong 2.8 giây đầu
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="welcome-en-subtitle-input" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Phụ Đề Tiếng Anh (Phase 2)
+              </Label>
+              <Input
+                id="welcome-en-subtitle-input"
+                type="text"
+                placeholder="Welcome to the ecosystem of"
+                value={welcomeEnSubtitle}
+                onChange={(e) => setWelcomeEnSubtitle(e.target.value)}
+                className="text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Dòng chữ nhỏ chuyển tiếp hiển thị bằng tiếng Anh
+              </p>
+            </div>
+          </div>
+
+          {/* Live Preview Box */}
+          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-3 relative overflow-hidden">
+            <div className="absolute top-2 right-3 text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+              Live Preview
+            </div>
+            <div className="flex flex-col items-center justify-center pt-2">
+              <div className="w-16 h-16 rounded-2xl bg-white/[0.06] border border-white/10 p-2 shadow-lg flex items-center justify-center mb-3">
+                <img
+                  src="/brand/mvd_brand_logo_minimal_white.png"
+                  alt="Logo"
+                  className="w-full h-full object-contain filter drop-shadow-md"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = '/logo.png';
+                  }}
+                />
+              </div>
+              <span className="text-[11px] font-medium tracking-[0.2em] text-sky-400 uppercase">
+                {welcomeViSubtitle || 'Chào mừng bạn đến với hệ sinh thái'}
+              </span>
+              <h2 className="text-xl md:text-2xl font-black text-white tracking-wide mt-1">
+                {welcomeTitle || 'MVD Tech & Design Studio'}
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button
+              onClick={handleSaveWelcome}
+              disabled={updateWelcomeMutation.isPending}
+              className="gap-2 bg-sky-600 hover:bg-sky-500 text-white font-semibold"
+            >
+              {updateWelcomeMutation.isPending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Đang lưu màn hình chào...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} />
+                  Lưu Màn Hình Chào Mừng
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Cấu Hình Dịch Vụ Gửi Email (HTTPS API & SMTP) */}
       <Card className="border border-border/80 shadow-sm">
         <CardHeader>
@@ -745,13 +914,13 @@ export function SystemSettingsManager() {
               </Label>
               <Input
                 type="text"
-                placeholder="MVD Academy"
+                placeholder="MVD Tech & Design Studio"
                 value={emailFromName}
                 onChange={(e) => setEmailFromName(e.target.value)}
                 className="text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
-                Tên hiển thị khi khách nhận được email (VD: MVD Academy).
+                Tên hiển thị khi khách nhận được email (VD: MVD Tech & Design Studio).
               </p>
             </div>
           </div>
