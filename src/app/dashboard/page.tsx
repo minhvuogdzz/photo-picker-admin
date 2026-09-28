@@ -66,11 +66,21 @@ export default function DashboardPage() {
     },
   });
 
+  // Backend có 2 kiểu trả về: mảng trần (/admin/users) và bọc { success, data }
+  // (/license/keys, đổi ở V3 vì app desktop tự bóc `data`). Nhận cả hai để một bên
+  // đổi shape không làm trang trắng — trước đây `keys.map` ném "map is not a function"
+  // và hỏng toàn bộ dashboard.
+  const unwrapList = (payload: any): any[] => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+  };
+
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
       const res = await api.get('/admin/users');
-      return res.data;
+      return unwrapList(res.data);
     },
   });
 
@@ -78,7 +88,7 @@ export default function DashboardPage() {
     queryKey: ['keys'],
     queryFn: async () => {
       const res = await api.get('/license/keys');
-      return res.data;
+      return unwrapList(res.data);
     },
   });
 
