@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResourceManager } from "@/components/ResourceManager";
 import { SystemSettingsManager } from "@/components/SystemSettingsManager";
+import { OrderManager } from "@/components/OrderManager";
+import { PricingManager } from "@/components/PricingManager";
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { compressShowcaseBatch, formatFileSizeMB, CompressionResult } from '@/lib/imageCompressor';
@@ -46,7 +48,7 @@ export default function DashboardPage() {
         queryClient.invalidateQueries({ queryKey: ['keys'] }),
         queryClient.invalidateQueries({ queryKey: ['showcase'] }),
         queryClient.invalidateQueries({ queryKey: ['showcase-albums'] }),
-
+        queryClient.invalidateQueries({ queryKey: ['admin-orders'] }),
       ]);
       toast.success('Dữ liệu đã được làm mới');
     } catch {
@@ -82,8 +84,8 @@ export default function DashboardPage() {
 
   // User Actions
   const updateSubMutation = useMutation({
-    mutationFn: async ({ id, addDays, status, isPremium }: any) => {
-      await api.post(`/admin/users/${id}/subscription`, { addDays, status, isPremium });
+    mutationFn: async ({ id, addDays, status, targetApp }: any) => {
+      await api.post(`/admin/users/${id}/subscription`, { addDays, status, targetApp });
     },
     onSuccess: () => {
       toast.success('Cập nhật gói thành công');
@@ -131,13 +133,13 @@ export default function DashboardPage() {
 
   // Key Actions
   const [generateKeysOpen, setGenerateKeysOpen] = useState(false);
-  const [keyParams, setKeyParams] = useState({ count: 1, durationDays: 90, keyType: 'ORIGINAL' });
+  const [keyParams, setKeyParams] = useState({ count: 1, durationDays: 90, targetApp: 'ALL' });
   const generateKeysMutation = useMutation({
     mutationFn: async () => {
       await api.post(`/license/generate`, keyParams);
     },
     onSuccess: () => {
-      toast.success(`Đã tạo ${keyParams.count} key ${keyParams.keyType === 'PREMIUM' ? '👑 Premium' : 'Original'} thành công`);
+      toast.success(`Đã tạo ${keyParams.count} key (${keyParams.targetApp === 'ALL' ? 'Toàn bộ App' : keyParams.targetApp}) thành công`);
       setGenerateKeysOpen(false);
       queryClient.invalidateQueries({ queryKey: ['keys'] });
     },
@@ -382,7 +384,6 @@ export default function DashboardPage() {
     const daysRemaining = expiresAt ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
 
     if (statusFilter === 'ACTIVE') return status === 'ACTIVE';
-    if (statusFilter === 'LIFETIME') return status === 'LIFETIME';
     if (statusFilter === 'TRIAL') return status === 'TRIAL';
     if (statusFilter === 'EXPIRED') return status === 'EXPIRED';
     if (statusFilter === 'SUSPENDED') return status === 'SUSPENDED';
@@ -472,6 +473,8 @@ export default function DashboardPage() {
       <Tabs defaultValue="users" className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="users" className="flex items-center gap-2"><Users size={16}/> Khách hàng</TabsTrigger>
+          <TabsTrigger value="orders" className="flex items-center gap-2"><CreditCard size={16}/> Đơn hàng & Doanh thu</TabsTrigger>
+          <TabsTrigger value="pricing" className="flex items-center gap-2"><Sparkles size={16}/> Bảng giá & Thanh toán</TabsTrigger>
           <TabsTrigger value="keys" className="flex items-center gap-2"><Key size={16}/> License Keys</TabsTrigger>
           <TabsTrigger value="resources" className="flex items-center gap-2"><Layers size={16}/> Kho Tài Nguyên</TabsTrigger>
           <TabsTrigger value="showcase" className="flex items-center gap-2"><ImageIcon size={16}/> Album Slider (Đăng nhập)</TabsTrigger>
@@ -501,8 +504,7 @@ export default function DashboardPage() {
                   >
                     <option value="ALL">Tất cả trạng thái</option>
                     <option value="ACTIVE">Đang Active</option>
-                    <option value="LIFETIME">Vĩnh viễn (Lifetime)</option>
-                    <option value="TRIAL">Đang dùng thử</option>
+                    <option value="TRIAL">Đang dùng thử (Trial)</option>
                     <option value="EXPIRED">Đã hết hạn</option>
                     <option value="EXPIRING_SOON">Sắp hết hạn (&lt;7 ngày)</option>
                     <option value="CRACK">Crack / Không bản quyền</option>
@@ -548,7 +550,7 @@ export default function DashboardPage() {
                     <TableHead>Email</TableHead>
                     <TableHead>Tên</TableHead>
                     <TableHead>Trạng thái</TableHead>
-                    <TableHead>Đặc quyền</TableHead>
+                    <TableHead>Quyền App (Entitlements)</TableHead>
                     <TableHead>Hết hạn</TableHead>
                     <TableHead>Thiết bị</TableHead>
                     <TableHead className="text-right">Hành động</TableHead>
@@ -579,27 +581,41 @@ export default function DashboardPage() {
                         <TableCell>{user.name}</TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            user.subscription?.status === 'ACTIVE' || user.subscription?.status === 'LIFETIME' 
-                              ? 'bg-green-100 text-green-800' 
-                              : user.subscription?.status === 'SUSPENDED' 
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-gray-100 text-gray-800'
+                            user.subscription?.status === 'ACTIVE'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                              : user.subscription?.status === 'TRIAL'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                                : user.subscription?.status === 'SUSPENDED' 
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
                           }`}>
-                            {user.subscription?.status || 'INACTIVE'}
+                            {user.subscription?.status === 'TRIAL' ? 'DÙNG THỬ (TRIAL)' : user.subscription?.status || 'INACTIVE'}
                           </span>
                         </TableCell>
                         <TableCell>
-                          {user.subscription?.isPremium ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                              👑 VIP Premium
-                            </span>
+                          {user.subscription?.entitlements && user.subscription.entitlements.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {user.subscription.entitlements.map((ent: any, i: number) => (
+                                <span
+                                  key={i}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    ent.app === 'ALL'
+                                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-300 dark:border-purple-700'
+                                      : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-300 dark:border-blue-700'
+                                  }`}
+                                >
+                                  {ent.app === 'ALL' ? 'Toàn bộ App' : ent.app}
+                                  {ent.isTrial ? ' (Trial)' : ''}
+                                </span>
+                              ))}
+                            </div>
                           ) : (
                             <span className="text-xs text-muted-foreground px-2 py-0.5 rounded bg-muted/60">
-                              Chuẩn (Original)
+                              Chung
                             </span>
                           )}
                         </TableCell>
-                        <TableCell>{user.subscription?.status === 'LIFETIME' ? 'Vĩnh viễn' : formatDateWithRemaining(user.subscription?.expiresAt)}</TableCell>
+                        <TableCell>{formatDateWithRemaining(user.subscription?.expiresAt)}</TableCell>
                         <TableCell>
                           {user.devices?.length > 0 ? (
                             <div className="flex items-center gap-2">
@@ -631,23 +647,23 @@ export default function DashboardPage() {
                               </Button>
                             } />
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                className={user.subscription?.isPremium ? "text-amber-600 font-semibold" : "font-semibold"}
-                                onClick={() => updateSubMutation.mutate({ id: user.id, isPremium: !user.subscription?.isPremium })}
-                              >
-                                {user.subscription?.isPremium ? "👑 Hủy quyền VIP Premium" : "👑 Cấp quyền VIP Premium"}
+                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 30, targetApp: 'ALL' })}>
+                                Gia hạn 1 tháng (Toàn bộ App)
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 30 })}>
-                                Gia hạn 1 tháng
+                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 90, targetApp: 'ALL' })}>
+                                Gia hạn 3 tháng (Toàn bộ App)
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 90 })}>
-                                Gia hạn 3 tháng
+                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 180, targetApp: 'ALL' })}>
+                                Gia hạn 6 tháng (Toàn bộ App)
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 365 })}>
-                                Gia hạn 1 năm
+                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 365, targetApp: 'ALL' })}>
+                                Gia hạn 1 năm (Toàn bộ App)
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, status: 'LIFETIME' })}>
-                                Cấp Lifetime
+                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 30, targetApp: 'photo-picker' })}>
+                                Gia hạn 1 tháng (Riêng Lọc ảnh)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => updateSubMutation.mutate({ id: user.id, addDays: 90, targetApp: 'photo-picker' })}>
+                                Gia hạn 3 tháng (Riêng Lọc ảnh)
                               </DropdownMenuItem>
                               <DropdownMenuItem 
                                 className="text-red-600 focus:bg-red-50 focus:text-red-600"
@@ -680,14 +696,17 @@ export default function DashboardPage() {
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label>Loại Bản Quyền (Key Type)</Label>
+                      <Label>Ứng dụng áp dụng (Target App)</Label>
                       <select
-                        value={keyParams.keyType}
-                        onChange={(e) => setKeyParams({ ...keyParams, keyType: e.target.value })}
+                        value={keyParams.targetApp}
+                        onChange={(e) => setKeyParams({ ...keyParams, targetApp: e.target.value })}
                         className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
                       >
-                        <option value="ORIGINAL">Original Key (Bản quyền chuẩn)</option>
-                        <option value="PREMIUM">👑 Premium Key (Full tính năng + Kho tài nguyên)</option>
+                        <option value="ALL">Toàn bộ App (Super App)</option>
+                        <option value="photo-picker">Lọc ảnh (photo-picker)</option>
+                        <option value="contact-the-sheet">Liên hệ trang tính (contact-the-sheet)</option>
+                        <option value="photo-counter">Đếm ảnh (photo-counter)</option>
+                        <option value="resources">Kho tài nguyên (resources)</option>
                       </select>
                     </div>
                     <div className="space-y-2">
@@ -711,7 +730,7 @@ export default function DashboardPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>License Key</TableHead>
-                    <TableHead>Loại Key</TableHead>
+                    <TableHead>Ứng dụng áp dụng</TableHead>
                     <TableHead>Thời hạn</TableHead>
                     <TableHead>Trạng thái</TableHead>
                     <TableHead>Người dùng (nếu có)</TableHead>
@@ -728,15 +747,13 @@ export default function DashboardPage() {
                       <TableRow key={k.id}>
                         <TableCell className="font-mono font-medium tracking-widest">{k.key}</TableCell>
                         <TableCell>
-                          {k.keyType === 'PREMIUM' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                              👑 PREMIUM
-                            </span>
-                          ) : (
-                            <span className="text-xs font-medium text-muted-foreground px-2 py-0.5 rounded bg-muted/60">
-                              ORIGINAL
-                            </span>
-                          )}
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                            k.targetApp === 'ALL' || !k.targetApp
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                          }`}>
+                            {k.targetApp === 'ALL' || !k.targetApp ? 'Toàn bộ App' : k.targetApp}
+                          </span>
                         </TableCell>
                         <TableCell>{k.durationDays} ngày</TableCell>
                         <TableCell>
@@ -1274,6 +1291,13 @@ export default function DashboardPage() {
           </Dialog>
         </TabsContent>
 
+        <TabsContent value="orders">
+          <OrderManager />
+        </TabsContent>
+
+        <TabsContent value="pricing">
+          <PricingManager />
+        </TabsContent>
 
         <TabsContent value="resources">
           <ResourceManager />
