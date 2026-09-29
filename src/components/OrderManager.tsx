@@ -91,6 +91,20 @@ export function OrderManager() {
     },
   });
 
+  // 3. Mutation Gửi lại Email cho khách
+  const resendMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await api.post(`/admin/orders/${orderId}/resend-email`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message || 'Đã gửi lại email thành công!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Lỗi khi gửi lại email');
+    },
+  });
+
   const handleCopy = (text: string, keyId: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(keyId);
@@ -442,7 +456,35 @@ export function OrderManager() {
                               Duyệt & Xuất Key
                             </Button>
                           ) : (
-                            <span className="text-[11px] text-muted-foreground">Đã xử lý</span>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {order.generatedKey ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs font-semibold gap-1 text-primary hover:text-primary hover:bg-primary/10 border-primary/30"
+                                  disabled={resendMutation.isPending && resendMutation.variables === order.id}
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        `Gửi lại email hóa đơn và mã License Key (${order.generatedKey}) tới "${order.buyerEmail}"?`
+                                      )
+                                    ) {
+                                      resendMutation.mutate(order.id);
+                                    }
+                                  }}
+                                  title="Gửi lại email xác nhận và mã key cho khách"
+                                >
+                                  {resendMutation.isPending && resendMutation.variables === order.id ? (
+                                    <RotateCw className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Mail className="w-3 h-3" />
+                                  )}
+                                  <span>Gửi lại Email</span>
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">Đã xử lý</span>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
