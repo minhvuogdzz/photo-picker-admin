@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers, RotateCw, Sparkles, Settings } from 'lucide-react';
+import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers, RotateCw, Sparkles, Settings, Megaphone } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { ResourceManager } from "@/components/ResourceManager";
 import { SystemSettingsManager } from "@/components/SystemSettingsManager";
 import { OrderManager } from "@/components/OrderManager";
 import { PricingManager } from "@/components/PricingManager";
+import { AnnouncementPopupManager } from "@/components/AnnouncementPopupManager";
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { compressShowcaseBatch, formatFileSizeMB, CompressionResult } from '@/lib/imageCompressor';
@@ -488,6 +489,7 @@ export default function DashboardPage() {
           <TabsTrigger value="keys" className="flex items-center gap-2"><Key size={16}/> License Keys</TabsTrigger>
           <TabsTrigger value="resources" className="flex items-center gap-2"><Layers size={16}/> Kho Tài Nguyên</TabsTrigger>
           <TabsTrigger value="showcase" className="flex items-center gap-2"><ImageIcon size={16}/> Album Slider (Đăng nhập)</TabsTrigger>
+          <TabsTrigger value="announcement" className="flex items-center gap-2"><Megaphone size={16}/> Popup Thông báo</TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-2"><Settings size={16}/> Cấu hình hệ thống</TabsTrigger>
         </TabsList>
         
@@ -1311,6 +1313,10 @@ export default function DashboardPage() {
 
         <TabsContent value="resources">
           <ResourceManager />
+        </TabsContent>
+
+        <TabsContent value="announcement">
+          <AnnouncementPopupManager />
         </TabsContent>
 
         <TabsContent value="settings">
