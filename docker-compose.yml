@@ -1,0 +1,13 @@
+name: photo-picker-admin
+
+services:
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.yourdomain.com}
+    container_name: photo-picker-admin
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:80"

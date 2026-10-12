@@ -12,7 +12,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     if (!token || !userId) return;
 
-    const socket = io('https://photo-picker-backend.onrender.com', {
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL || 'https://apidhstudio.devhouse.vn';
+    const socket = io(socketUrl, {
       transports: ['websocket'],
       reconnectionAttempts: 5,
       reconnectionDelay: 5000,

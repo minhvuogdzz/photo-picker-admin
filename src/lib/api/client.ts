@@ -10,7 +10,7 @@ const getBaseUrl = () => {
       return 'http://localhost:3000';
     }
   }
-  return 'https://photo-picker-backend.onrender.com';
+  return 'https://apidhstudio.devhouse.vn';
 };
 
 const api = axios.create({
