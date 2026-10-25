@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import {
   Megaphone,
-  Sparkles,
   Save,
   RotateCcw,
   Eye,
@@ -26,11 +25,11 @@ import {
   Wrench,
   Tag,
   Check,
+  LayoutTemplate,
 } from 'lucide-react';
 
 const DEFAULT_TERMS_HTML = `<div style="font-family: inherit; line-height: 1.6;">
   <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 14px; border-radius: 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25);">
-    <span style="font-size: 20px;">📢</span>
     <span style="font-weight: 700; color: #2563eb; font-size: 14px;">Cập Nhật Quan Trọng Từ Ngày 01/10/2026</span>
   </div>
 
@@ -41,7 +40,7 @@ const DEFAULT_TERMS_HTML = `<div style="font-family: inherit; line-height: 1.6;"
   </p>
 
   <div style="background: rgba(148, 163, 184, 0.12); padding: 12px 16px; border-radius: 12px; border-left: 4px solid #3b82f6; margin-bottom: 14px;">
-    <div style="font-weight: 700; margin-bottom: 6px; font-size: 13px;">📌 Các điểm chính cần lưu ý:</div>
+    <div style="font-weight: 700; margin-bottom: 6px; font-size: 13px;">Các điểm chính cần lưu ý:</div>
     <ul style="margin: 0; padding-left: 18px; font-size: 12.5px;">
       <li style="margin-bottom: 4px;">Các gói bản quyền kích hoạt trước ngày 01/10/2026 vẫn được bảo lưu thời hạn và quyền lợi đầy đủ.</li>
       <li style="margin-bottom: 4px;">Tính năng lưu trữ đám mây và đồng bộ presets sẽ được tối ưu băng thông tốc độ cao.</li>
@@ -56,7 +55,6 @@ const DEFAULT_TERMS_HTML = `<div style="font-family: inherit; line-height: 1.6;"
 
 const TEMPLATE_MAINTENANCE = `<div style="font-family: inherit; line-height: 1.6;">
   <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 14px; border-radius: 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3);">
-    <span style="font-size: 20px;">🛠️</span>
     <span style="font-weight: 700; color: #d97706; font-size: 14px;">Thông Báo Nâng Cấp Hệ Thống Máy Chủ</span>
   </div>
 
@@ -65,14 +63,13 @@ const TEMPLATE_MAINTENANCE = `<div style="font-family: inherit; line-height: 1.6
   </p>
 
   <div style="background: rgba(148, 163, 184, 0.1); padding: 12px 16px; border-radius: 12px; margin-bottom: 14px;">
-    <p style="margin: 0 0 6px 0; font-size: 13px;">⏱ <strong>Thời gian dự kiến:</strong> 23:30 - 02:00 ngày mai.</p>
-    <p style="margin: 0; font-size: 13px;">⚡ <strong>Phạm vi ảnh hưởng:</strong> Các tính năng ngoại tuyến (offline) vẫn hoạt động 100% bình thường trên máy tính của bạn.</p>
+    <p style="margin: 0 0 6px 0; font-size: 13px;"><strong>Thời gian dự kiến:</strong> 23:30 - 02:00 ngày mai.</p>
+    <p style="margin: 0; font-size: 13px;"><strong>Phạm vi ảnh hưởng:</strong> Các tính năng ngoại tuyến (offline) vẫn hoạt động 100% bình thường trên máy tính của bạn.</p>
   </div>
 </div>`;
 
 const TEMPLATE_PROMO = `<div style="font-family: inherit; line-height: 1.6;">
   <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 14px; border-radius: 12px; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3);">
-    <span style="font-size: 20px;">🎁</span>
     <span style="font-weight: 700; color: #9333ea; font-size: 14px;">Ưu Đãi Đặc Biệt Dành Riêng Cho Bạn!</span>
   </div>
 
@@ -81,9 +78,9 @@ const TEMPLATE_PROMO = `<div style="font-family: inherit; line-height: 1.6;">
   </p>
 
   <ul style="margin: 0 0 14px 0; padding-left: 20px; font-size: 13px;">
-    <li style="margin-bottom: 5px;">🔥 Tặng thêm <strong>30 ngày sử dụng miễn phí</strong>.</li>
-    <li style="margin-bottom: 5px;">📦 Trọn bộ kho Preset & Mockup độc quyền 2026.</li>
-    <li style="margin-bottom: 5px;">⚡ Hỗ trợ kích hoạt và cài đặt Ultraview 1-1 miễn phí.</li>
+    <li style="margin-bottom: 5px;">Tặng thêm <strong>30 ngày sử dụng miễn phí</strong>.</li>
+    <li style="margin-bottom: 5px;">Trọn bộ kho Preset & Mockup độc quyền 2026.</li>
+    <li style="margin-bottom: 5px;">Hỗ trợ kích hoạt và cài đặt Ultraview 1-1 miễn phí.</li>
   </ul>
 </div>`;
 
@@ -252,7 +249,7 @@ export function AnnouncementPopupManager() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <LayoutTemplate className="w-3.5 h-3.5 text-muted-foreground" />
                     <span>Mẫu nội dung gợi ý nhanh:</span>
                   </Label>
                 </div>
@@ -456,7 +453,6 @@ export function AnnouncementPopupManager() {
                           {title || 'Chưa đặt tiêu đề'}
                         </h4>
                         <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-500">
-                          <Sparkles className="w-2.5 h-2.5" />
                           Thông báo
                         </span>
                       </div>

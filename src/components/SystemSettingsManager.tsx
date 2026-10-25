@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Zap, Globe, Sparkles, LayoutTemplate, Phone, Mail, Send, KeyRound, ExternalLink, Monitor } from 'lucide-react';
+import { Clock, ShieldAlert, CheckCircle2, Loader2, RefreshCw, Sliders, Info, Globe, LayoutTemplate, Phone, Mail, Send, KeyRound, ExternalLink, Monitor, Save } from 'lucide-react';
 
 const PRESET_DURATIONS = [
   { label: '5 phút', value: 5 },
@@ -537,7 +537,7 @@ export function SystemSettingsManager() {
                     </>
                   ) : (
                     <>
-                      <Zap size={16} />
+                      <Save size={16} />
                       Lưu cấu hình phiên ({durationMinutes} phút)
                     </>
                   )}
@@ -740,7 +740,7 @@ export function SystemSettingsManager() {
                 </>
               ) : (
                 <>
-                  <Sparkles size={16} />
+                  <Save size={16} />
                   Lưu banner trang chủ
                 </>
               )}
@@ -898,7 +898,7 @@ export function SystemSettingsManager() {
                 onChange={(e) => setEmailProvider(e.target.value as any)}
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="auto">Tự động (Ưu tiên Resend ➔ Brevo ➔ SMTP)</option>
+                <option value="auto">Tự động (Ưu tiên Resend → Brevo → SMTP)</option>
                 <option value="resend">Resend.com (Khuyên dùng - Cổng 443)</option>
                 <option value="brevo">Brevo / Sendinblue (Cổng 443)</option>
                 <option value="smtp">Gmail SMTP (Cần server mở cổng 465/587)</option>

@@ -397,7 +397,7 @@ export function ResourceManager() {
 
                       <TableCell>
                         <div className="text-xs font-mono font-semibold">{item.fileFormat}</div>
-                        <div className="text-[10px] text-muted-foreground">{item.size} • ★ {item.rating}</div>
+                        <div className="text-[10px] text-muted-foreground">{item.size} • <Star className="inline w-2.5 h-2.5 -mt-0.5 fill-amber-400 text-amber-400" aria-hidden="true" /> {item.rating}</div>
                       </TableCell>
 
                       <TableCell>
@@ -443,7 +443,7 @@ export function ResourceManager() {
                             size="sm"
                             onClick={() => handleOpenEdit(item)}
                             className="h-8 w-8 p-0"
-                            title="Sửa tài nguyên"
+                            title="Sửa tài nguyên" aria-label="Sửa tài nguyên"
                           >
                             <Edit size={14} />
                           </Button>
@@ -456,7 +456,7 @@ export function ResourceManager() {
                               }
                             }}
                             className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
-                            title="Xóa tài nguyên"
+                            title="Xóa tài nguyên" aria-label="Xóa tài nguyên"
                           >
                             <Trash2 size={14} />
                           </Button>
@@ -561,7 +561,7 @@ export function ResourceManager() {
                     className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30"
                   >
                     #{tag}
-                    <button
+                    <button aria-label="Đóng"
                       type="button"
                       onClick={() => setHashtags(hashtags.filter((t) => t !== tag))}
                       className="hover:text-destructive text-[10px]"
@@ -658,12 +658,12 @@ export function ResourceManager() {
                   onChange={(e) => setRating(e.target.value)}
                   className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs"
                 >
-                  <option value="5.0">5.0 ★★★★★ (Xuất sắc)</option>
-                  <option value="4.9">4.9 ★★★★★ (Rất cao)</option>
-                  <option value="4.8">4.8 ★★★★☆ (Khuyên dùng)</option>
-                  <option value="4.7">4.7 ★★★★☆ (Tốt)</option>
-                  <option value="4.5">4.5 ★★★★☆</option>
-                  <option value="4.0">4.0 ★★★★☆</option>
+                  <option value="5.0">5.0 (Xuất sắc)</option>
+                  <option value="4.9">4.9 (Rất cao)</option>
+                  <option value="4.8">4.8 (Khuyên dùng)</option>
+                  <option value="4.7">4.7 (Tốt)</option>
+                  <option value="4.5">4.5</option>
+                  <option value="4.0">4.0</option>
                 </select>
               </div>
 

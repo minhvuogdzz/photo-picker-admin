@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import {
-  Sparkles,
   Building2,
   Key,
   Plus,
@@ -26,6 +25,7 @@ import {
   Star,
   DollarSign,
   ArrowRight,
+  Tag,
 } from 'lucide-react';
 
 interface PricingPackage {
@@ -411,7 +411,7 @@ export function PricingManager() {
             </div>
             {sepayApiKey.trim().length < 16 && (
               <p className="text-[11px] font-semibold text-red-600 dark:text-red-400">
-                ⚠️ Chưa có key hợp lệ: webhook SePay sẽ bị từ chối (503) và đơn hàng không
+                Chưa có key hợp lệ: webhook SePay sẽ bị từ chối (503) và đơn hàng không
                 được tự động kích hoạt. Bắt buộc nhập tối thiểu 16 ký tự, trùng với key đã
                 đặt trên SePay.vn.
               </p>
@@ -440,7 +440,7 @@ export function PricingManager() {
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <CardTitle className="text-lg font-bold flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-amber-500" />
+              <Tag className="w-5 h-5 text-primary" />
               Quản lý Bảng Giá Gói Cước (V3.0)
             </CardTitle>
             <CardDescription>
@@ -532,7 +532,7 @@ export function PricingManager() {
                       </TableCell>
 
                       <TableCell className="text-right space-x-1">
-                        <Button
+                        <Button aria-label="Chỉnh sửa"
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0"
@@ -540,7 +540,7 @@ export function PricingManager() {
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </Button>
-                        <Button
+                        <Button aria-label="Xoá"
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0 text-destructive hover:text-destructive"

@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers, RotateCw, Sparkles, Settings, Megaphone } from 'lucide-react';
+import { MoreHorizontal, Users, MonitorSmartphone, CreditCard, Key, Plus, Loader2, Search, Filter, ShieldAlert, BellRing, Image as ImageIcon, UploadCloud, Trash2, Eye, EyeOff, ExternalLink, ArrowUp, ArrowDown, X, Layers, RotateCw, Settings, Megaphone, LogOut, Tag } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import { OrderManager } from "@/components/OrderManager";
 import { PricingManager } from "@/components/PricingManager";
 import { AnnouncementPopupManager } from "@/components/AnnouncementPopupManager";
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useEffect } from 'react';
 import { compressShowcaseBatch, formatFileSizeMB, CompressionResult } from '@/lib/imageCompressor';
 
@@ -423,10 +424,16 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+    <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
+          <Image src="/logo.png" alt="" width={40} height={40} className="rounded-xl shadow-sm ring-1 ring-foreground/10" priority />
+          <div className="leading-tight">
+            <h1 className="text-xl font-semibold tracking-tight">DH Studio Admin</h1>
+            <p className="text-sm text-muted-foreground">Quản lý giấy phép, đơn hàng và nội dung</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={handleRefreshAll} disabled={isRefreshing}>
             <RotateCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Làm mới
@@ -435,57 +442,50 @@ export default function DashboardPage() {
             {scanMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
             Quét Bản Quyền
           </Button>
-          <Button variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => notifyMutation.mutate()} disabled={notifyMutation.isPending}>
+          <Button variant="outline" className="border-primary/30 text-primary hover:bg-accent hover:text-accent-foreground" onClick={() => notifyMutation.mutate()} disabled={notifyMutation.isPending}>
             {notifyMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <BellRing className="w-4 h-4 mr-2" />}
             Thông báo Hết Hạn
           </Button>
-          <Button variant="secondary" onClick={() => {
+          <Button variant="ghost" onClick={() => {
             localStorage.removeItem('admin_token');
             window.location.href = '/login';
           }}>
+            <LogOut className="w-4 h-4 mr-2" aria-hidden="true" />
             Đăng xuất
           </Button>
         </div>
-      </div>
+      </header>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Tổng Khách hàng</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Gói Đang Hoạt Động</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats?.activeSubscriptions || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Thiết bị đang chạy</CardTitle>
-            <MonitorSmartphone className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats?.totalDevices || 0}</div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          { label: 'Tổng Khách hàng', value: stats?.totalUsers, icon: Users, tone: 'bg-primary/10 text-primary' },
+          { label: 'Gói Đang Hoạt Động', value: stats?.activeSubscriptions, icon: CreditCard, tone: 'bg-success/10 text-success' },
+          { label: 'Thiết bị đang chạy', value: stats?.totalDevices, icon: MonitorSmartphone, tone: 'bg-info/10 text-info' },
+        ].map(({ label, value, icon: Icon, tone }) => (
+          <Card key={label}>
+            <CardContent className="flex items-center gap-4">
+              <span className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                <Icon className="size-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground">{label}</p>
+                {statsLoading ? (
+                  <span className="mt-1 block h-7 w-14 animate-pulse rounded bg-muted" aria-label="Đang tải" />
+                ) : (
+                  <p className="text-2xl font-semibold tabular-nums">{value || 0}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <Tabs defaultValue="users" className="w-full">
-        <TabsList className="mb-4">
+        <TabsList variant="line" aria-label="Khu vực quản trị" className="mb-4">
           <TabsTrigger value="users" className="flex items-center gap-2"><Users size={16}/> Khách hàng</TabsTrigger>
           <TabsTrigger value="orders" className="flex items-center gap-2"><CreditCard size={16}/> Đơn hàng & Doanh thu</TabsTrigger>
-          <TabsTrigger value="pricing" className="flex items-center gap-2"><Sparkles size={16}/> Bảng giá & Thanh toán</TabsTrigger>
+          <TabsTrigger value="pricing" className="flex items-center gap-2"><Tag size={16}/> Bảng giá & Thanh toán</TabsTrigger>
           <TabsTrigger value="keys" className="flex items-center gap-2"><Key size={16}/> License Keys</TabsTrigger>
           <TabsTrigger value="resources" className="flex items-center gap-2"><Layers size={16}/> Kho Tài Nguyên</TabsTrigger>
           <TabsTrigger value="showcase" className="flex items-center gap-2"><ImageIcon size={16}/> Album Slider (Đăng nhập)</TabsTrigger>
@@ -854,7 +854,7 @@ export default function DashboardPage() {
                       />
                       <div className="p-3 bg-muted/40 rounded-lg border border-border/50 text-xs text-muted-foreground space-y-1">
                         <p className="flex items-center gap-1.5 font-medium text-foreground">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" />
                           Tự động tối ưu Full HD & tải lên siêu tốc:
                         </p>
                         <p>
@@ -909,7 +909,7 @@ export default function DashboardPage() {
                                 type="button"
                                 onClick={() => removeAlbumImage(idx)}
                                 className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 text-white hover:bg-destructive flex items-center justify-center transition-colors z-10"
-                                title="Bỏ ảnh này"
+                                title="Bỏ ảnh này" aria-label="Bỏ ảnh này"
                               >
                                 <X size={12} />
                               </button>
@@ -1176,7 +1176,7 @@ export default function DashboardPage() {
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 p-0"
-                              title="Tăng thứ tự ưu tiên (chạy trước)"
+                              title="Tăng thứ tự ưu tiên (chạy trước)" aria-label="Tăng thứ tự ưu tiên (chạy trước)"
                               onClick={() =>
                                 updateAlbumOrderMutation.mutate({
                                   id: album.id,
@@ -1191,7 +1191,7 @@ export default function DashboardPage() {
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 p-0"
-                              title="Giảm thứ tự ưu tiên"
+                              title="Giảm thứ tự ưu tiên" aria-label="Giảm thứ tự ưu tiên"
                               onClick={() =>
                                 updateAlbumOrderMutation.mutate({
                                   id: album.id,
@@ -1207,7 +1207,7 @@ export default function DashboardPage() {
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              title="Xoá toàn bộ bộ ảnh"
+                              title="Xoá toàn bộ bộ ảnh" aria-label="Xoá toàn bộ bộ ảnh"
                               onClick={() => {
                                 if (
                                   confirm(
